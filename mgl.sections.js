@@ -75,6 +75,10 @@ export class mglInitSections{
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
+
+            if(options.onWindowResize)
+                options.onWindowResize(window.innerWidth, window.innerHeight);
+
             console.log("Window resized!", window.innerWidth, window.innerHeight);
         });
 
@@ -150,6 +154,8 @@ export class mglApp{
         // hero.position.set(1, 2, 3);
     }
 
+    onResizeApp(width, heigh){}
+
     // Run this app
     runApp(_options = {}){
         let options = {
@@ -164,6 +170,7 @@ export class mglApp{
                  fov: 45,
                  ... _options.camera
             },
+            onWindowResize: this.onResizeApp
         };
 
         // [Render section]
@@ -244,93 +251,5 @@ export class mglApp{
         // Stats
         if(mglBuild.debug)
             this.stats.endAnimate();
-    }
-
-};
-
-// level builder class
-
-export class mglLevelBuilder{
-    // Textures
-    textures = [];
-
-    getTexture(id){
-        let item = this.textures.find(item => item.id == id);
-        if(item)
-            return item.texture;
-
-        return undefined;
-    }
-
-    addTexture(id, texture){
-        let item = {
-            id: id,
-            texture: texture
-        };
-
-        this.textures.push(item);
-    }
-
-    removeTexture(id){
-        let index = this.textures.findIndex(item => item.id === id);
-
-        if(index !== -1){
-            this.textures.splice(index, 1);
-        }
-    }
-
-    clearTextures(){
-        this.textures.length = 0;
-    }
-
-    // Font
-    setFont(font){
-        this.mglFont = font;
-    }
-
-    // Draw
-    drawText2d(_optiopns = {}){
-        let options = {
-            text: "test",
-            size: 1,
-            color: 0xffffff,
-            position: new THREE.Vector3(0, 0, 0),
-            ... _optiopns
-        };
-
-        const material = new THREE.MeshBasicMaterial({
-            color: options.color,
-            side: THREE.DoubleSide
-        });
-
-        const shapes = this.mglFont.generateShapes(options.text, options.size);
-        const geometry = new THREE.ShapeGeometry(shapes);
-
-        geometry.computeBoundingBox();
-
-        const xMid = - 0.5 * (geometry.boundingBox.max.x - geometry.boundingBox.min.x);
-        geometry.translate(xMid, 0, 0);
-
-        const mesh = new THREE.Mesh(geometry, material);
-        mesh.position.copy(options.position);
-
-        return mesh;
-    }
-
-    // Buttons
-
-
-    // Callbacks
-    callback(){} // general
-    callbutton(){} // button
-
-    // Update
-    update(time, deltaTime){} // Animate
-
-    // Test
-    testDuplicateValues(enumObj) {
-        const values = Object.values(enumObj);
-        const uniqueValues = new Set(values);
-        return values.length !== uniqueValues.size;
     }
 };

@@ -70,11 +70,11 @@ class mglRandom{
 // Based on https://easings.net/
 // Value from 0 to 1
 class mglEasting{
-    easeInSine(x){
+    static easeInSine(x){
         return 1 - Math.cos((x * Math.PI) / 2);
     }
 
-    easeInOutQuad(x){
+    static easeInOutQuad(x){
         return x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2;
     }
 

@@ -917,6 +917,7 @@ void main(){
 
 };
 
+// Main examples shaders
 export let mglGlslMainExamples = {
     shaders: [
         { name: "chessboard", title: "Chessboard", code: "vec2 tile = floor(uv * 10.0); float pattern = mod(tile.x + tile.y, 2.0); col.xyz = vec3(1.0) * pattern;" },
@@ -1024,7 +1025,6 @@ void mainImage(inout vec4 fragColor, inout vec2 uv){
         }
 
         this.addItem(item);
-
     }
 
     addMainTemplate(name = "shadertoy"){
@@ -1047,6 +1047,151 @@ void mainImage(inout vec4 fragColor, inout vec2 uv){
         this.addItem(item);
 
         return this;
+    }
+
+    addMainPrototype(_options = {}){
+        let options = {
+            color: "#333333",
+            type: 0,
+            ... _options
+        };
+
+        const rId = this.getRandomId();
+
+        //let color = new THREE.Color(options.color);
+        // console.log("C", options.color, new THREE.Color().setHex(options.color));
+
+        // const c = 0xff0040;
+        // const col = new THREE.Color();
+        // col.setHex(c);
+        // console.log("C", c, new THREE.Color().setHex(c));
+
+        // const color = new THREE.Color();
+        // color.setHex(0xff0040);
+        // console.log("CC", color.convertLinearToSRGB());
+        // console.log("C", c, new THREE.Color(c).getHexString()); // "ff0040"
+
+        let item = {
+            type: this.MGLCT_MAIN,
+            main: `${rId}Image`,
+            uniforms: {
+                [`${rId}color`]: { value: new THREE.Color(options.color) },
+                [`${rId}type`]: { value: options.type },
+            },
+            fragmentShader: `
+float ${rId}grid(vec2 uv, float square, float border){
+    uv += border * (1. / square) / 2.;
+    vec2 coord = fract(uv / (1. / square));
+    //vec2 grid = step(coord, vec2(border));
+    coord -= border / 2.;
+    coord = abs(coord);
+
+    vec2 grid = smoothstep(border / 2. + fwidth(uv.x), 0.0, coord);
+
+    return max(grid.x, grid.y);
+}
+
+float ${rId}plus(vec2 uv, float thickness){
+    vec2 center = vec2(0.5);
+    float aa = fwidth(uv.x);
+    float length = .25;
+
+    vec2 d = abs(uv - center);
+
+    float horz = smoothstep(thickness + aa, 0.0, abs(d.y)) *
+        smoothstep(length + aa, length - aa, abs(d.x));
+
+    float vert = smoothstep(thickness + aa, 0.0, abs(d.x)) *
+        smoothstep(length + aa, length - aa, abs(d.y));
+
+    return max(horz, vert);
+}
+
+mat2 ${rId}rotate(float angle){
+    float s = sin(angle);
+    float c = cos(angle);
+    return mat2(c, -s, s, c);
+}
+
+float ${rId}checker(vec2 uv, float squares){
+    vec2 coord = floor(uv * squares);
+    float checker = mod(coord.x + coord.y, 2.0);
+    return checker;
+}
+
+uniform vec3 ${rId}color;
+uniform int ${rId}type;
+
+void ${rId}Image(inout vec4 fragColor, inout vec2 uv){
+    vec3 baseColor = ${rId}color;
+    vec3 color = baseColor;
+    int type = ${rId}type;
+
+    if(type == 7){
+        type = int(iTime * .75) % 7;
+    }
+
+if(type == 0){
+    // Wall
+    color = mix(color, mix(baseColor, vec3(1), .25), ${rId}grid(uv, 8., .025));
+    color = mix(color, mix(baseColor, vec3(1), .46), ${rId}grid(uv, 4., .011));
+    color = mix(color, vec3(1.), ${rId}grid(uv, 2., .011));
+} else if(type == 1){
+    // Plus
+    vec2 coord = fract(uv / (1. / 2.));
+
+    color = mix(color, mix(baseColor, vec3(1), .25), ${rId}grid(uv, 8., .025));
+    color = mix(color, mix(baseColor, vec3(1), .75), ${rId}plus(coord, 0.002));
+    color = mix(color, vec3(1.0), ${rId}plus(uv, 0.002));
+} else if(type == 2){
+    // Rotate
+    vec2 ur = (uv - 0.5) * ${rId}rotate(radians(45.0)) * 1.41421356237 + 0.5;
+
+    color = mix(color, mix(baseColor, vec3(1), .25), ${rId}grid(uv, 8., .025));
+    color = mix(color, mix(baseColor, vec3(1), .46), ${rId}grid(ur, 2., .011));
+    color = mix(color, mix(baseColor, vec3(1), .46), ${rId}grid(uv, 4., .011));
+} else if(type == 3){
+    // Chess
+    float c = ${rId}checker(uv, 8.0);
+    color = mix(baseColor, mix(baseColor, vec3(0), .150), c);
+    color = mix(color, mix(baseColor, vec3(1), .80), ${rId}grid(uv, 2., .011));
+} else if(type == 4){
+    // Big chess
+    color = mix(baseColor, mix(baseColor, vec3(0), .150), ${rId}checker(uv, 4.0));
+} else if(type == 5){
+    // Big box
+    color = mix(baseColor, mix(baseColor, vec3(0), .150), ${rId}checker(uv, 2.0));
+
+    vec2 coord = fract(uv / (1. / 2.));
+    color = mix(color, mix(baseColor, vec3(1), .75), ${rId}plus(coord, 0.002));
+} else if(type == 6){
+    // Window
+    vec2 uc = uv - .5;
+
+    if(length(uc.x) > .25 || length(uc.y) > .25 ){
+        color = mix(color, mix(baseColor, vec3(0), .25), .95);
+        color = mix(color, mix(baseColor, vec3(1), .25), ${rId}grid(uv, 8., .025));
+    } else {
+        color = mix(color, mix(baseColor, vec3(1), .25), ${rId}grid(uv, 8., .025));
+        color = mix(color, vec3(1.), ${rId}grid((uv + .25) * 2., 1., .051));
+
+        if(length(uc.x) < .20 && length(uc.y) < .2 )
+            color = mix(color, vec3(1.), ${rId}grid((uc + .20) * 2.5, 1., .051));
+    }
+}
+
+    fragColor = vec4(color, 1.0);
+}`
+        }
+
+        this.addItem(item);
+
+        return this;
+
+    }
+
+    static getMainPrototypeTypes(){
+        return ['wall', 'plus', 'rotate', 'chess', 'big_chess', 'big_box', 'window', 'random'];
     }
 
     addheightDiscard(_options = {}){

@@ -21,7 +21,7 @@ export class mglInitSections{
         let size = !options.canvas ? { width: window.innerWidth, height: window.innerHeight } : { width: options.canvas.offsetWidth, height: options.canvas.offsetHeight };
 
         // Make camera
-        camera = new THREE.PerspectiveCamera(options.camera.fov, size.width / size.height, 0.1, 1000);
+        camera = new THREE.PerspectiveCamera(options.camera?.fov ?? 45, size.width / size.height, 0.1, 1000);
         //console.log(options, size, window.innerWidth, window.innerHeight);
 
         // Make render

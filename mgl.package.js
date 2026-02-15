@@ -16,6 +16,8 @@ var mglPackage = {
                 "three": `${this.mglLibPath}extern/three.module.js`,
                 "three/addons/": `${this.mglLibPath}extern/addons/`,
                 "lil-gui": `${this.mglLibPath}extern/lil-gui.esm.js`,
+                "cannon-es": `${this.mglLibPath}extern/cannon-es.js`,
+                "matter-js": `${this.mglLibPath}extern/matter.min.js`,
             }
         };
     },

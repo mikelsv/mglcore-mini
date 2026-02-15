@@ -1,9 +1,39 @@
 import * as THREE from 'three';
-import { scene, camera, renderer } from 'mglcore/mgl.sections.js';
+import { scene, camera, renderer } from 'mglcore/mgl.app.js';
 
 // level builder class
 
 export class mglLevelBuilder{
+    // Screen
+    screen = [];
+    mouse = [];
+
+    mglSetScreen(){
+        const fov = camera.fov * (Math.PI / 180); // Преобразуем FOV в радианы
+        const distance = camera.position.z; // Расстояние до камеры
+
+        // Вычисляем высоту видимой области
+        const height = 2 * Math.tan(fov / 2) * distance;
+
+        // Вычисляем ширину видимой области с учетом соотношения сторон
+        const aspect = window.innerWidth / window.innerHeight;
+        const width = height * aspect;
+
+        // Screen
+        //const shelveWidth = Math.min(width / 3, height / 1.5 / 16 * 9);
+
+        this.screen.size = [width, height];
+        this.screen.ratio = width / height;
+
+        //this.shelveSize = [shelveWidth, shelveWidth / 16 * 9];
+        this.textSize = Math.min(this.screen.size[0] / (8 * .6), this.screen.size[1] / 4);//this.screenSize[1] / 4;
+
+        console.log("New screen!", window.innerWidth, window.innerHeight, this.screen.size);
+    }
+
+    // Scene
+    sceneId = 0;
+
     // Textures
     textures = [];
     gitems = [];
@@ -48,6 +78,7 @@ export class mglLevelBuilder{
 
     // Gitems
     addGitem(item){
+        item.sceneId = this.sceneId;
         this.gitems.push(item);
         scene.add(item.mesh);
     }
@@ -66,17 +97,31 @@ export class mglLevelBuilder{
 
     removeGitem(gitem){
         scene.remove(gitem.mesh);
+        //console.log('removeGitem', gitem);
 
         const index = this.gitems.indexOf(gitem);
         if(index > -1)
             this.gitems.splice(index, 1);
+        else
+            console.error("removeGitem() index fail!");
     }
 
     removeGitemsById(id){
         for(let i = this.gitems.length - 1; i >= 0; i --){
             if(this.gitems[i].id == id){
+                //console.log('removeGitemsById', id, this.gitems[i]);
                 this.removeGitem(this.gitems[i]);
-                this.gitems.splice(i, 1);
+                //this.gitems.splice(i, 1);
+            }
+        }
+    }
+
+    removeGitemsByGid(gid){
+        for(let i = this.gitems.length - 1; i >= 0; i --){
+            if(this.gitems[i].gid == gid){
+                //console.log('removeGitemsById', id, this.gitems[i]);
+                this.removeGitem(this.gitems[i]);
+                //this.gitems.splice(i, 1);
             }
         }
     }
@@ -88,6 +133,88 @@ export class mglLevelBuilder{
                 this.gitems.splice(i, 1);
             }
         }
+    }
+
+    removeGitemsBySceneId(id){
+        for(let i = this.gitems.length - 1; i >= 0; i --){
+            if(this.gitems[i].sceneId == id){
+                this.removeGitem(this.gitems[i]);
+                this.gitems.splice(i, 1);
+            }
+        }
+    }
+
+    // Mouse
+    mglOnTouchStart(event){
+        if(this.touchId === null){
+            const touch = event.touches[0];
+            this.touchId = touch.identifier;
+
+            event.clientX = touch.clientX;
+            event.clientY = touch.clientY;
+            event.isPrimary = true;
+
+            this.mglOnPointDown(event);
+        }
+    }
+
+    mglOnTouchMove(event){
+        const touch = Array.from(event.touches).find(t => t.identifier === this.touchId);
+        if(touch){
+            event.clientX = touch.clientX;
+            event.clientY = touch.clientY;
+            event.isPrimary = true;
+
+            this.mglOnPointMove(event);
+        }
+    }
+
+    mglOnTouchEnd(event){
+        if (Array.from(event.changedTouches).some(t => t.identifier === this.touchId)){
+            this.touchId = null;
+            event.isPrimary = true;
+            this.mglOnPointUp(event);
+        }
+    }
+
+    mglOnPointDown(event){
+        if(!event.isPrimary)
+            return ;
+
+        // Begin
+        this.pointDown = performance.now();
+        this.pointMove = 0;
+        this.pointPos = {x: event.clientX, y: event.clientY};
+        this.userOnPointDown(event);
+    }
+
+    mglOnPointMove(event){
+        if(!event.isPrimary)
+            return ;
+
+        //if(!this.pointDown)
+        //    return ;
+
+        this.pointMove = 1;
+        this.userOnPointMove(event);
+        this.pointPos = {x: event.clientX, y: event.clientY};
+
+        return ;
+    }
+
+    mglOnPointUp(event){
+        if(!event.isPrimary)
+            return ;
+
+        this.pointDown = 0;
+        this.userOnPointUp(event);
+
+        return ;
+    }
+
+    mglOnPointClick(event){
+        this.userOnPointClick(event);
+        return ;
     }
 
     // Draw
@@ -314,25 +441,25 @@ export class mglLevelBuilder{
     // Tweaks
     tweaks = [];
 
-    addTweak(data){
-        if(!data.item){
-            console.error("mglLevelBuilder.addTweak(): Fatal error. data.item is undefined", data);
-            return ;
-        }
+    addTweak(item, _tweak = {}){
+        if(!item.tweaks)
+            item.tweaks = [];
 
-        if(!data.item.tweaks)
-            data.item.tweaks = [];
+        // Init
+        let tweak = {
+            time : 1000,
+            onStart: undefined,
+            onTime: undefined,
+            onEnd: undefined,
+            ... _tweak
+        };
 
-        data.item.tweaks.push(data);
+        // Add
+        item.tweaks.push(tweak);
 
-        this.addTweakItem(data.item);
-    }
-
-    addTweakItem(item){
-        //let item = this.textures.find(item => item.id == id);
-        let tweak = this.tweaks.find(obj => obj == item);
-
-        if(!tweak)
+        // Exsist
+        let ext = this.tweaks.find(obj => obj == item);
+        if(!ext)
             this.tweaks.push(item);
     }
 
@@ -344,10 +471,19 @@ export class mglLevelBuilder{
             if(!item.tweak){
                 if(item.tweaks.length){
                     const tweak = item.tweaks[0];
-                    item.tweak = new mglTweak();
-                    item.tweak.start(tweak.time ? tweak.time : 100);
 
-                    this.onStartTweak(tweak);
+                    // New tweak
+                    item.tweak = new mglTweak();
+                    item.tweak.start(tweak.time ? tweak.time : 1000);
+
+                    // Calls
+                    item.tweak.onStart = tweak.onStart;
+                    item.tweak.onTime = tweak.onTime;
+                    item.tweak.onEnd = tweak.onEnd;
+
+                    item.tweak.onStart?.();
+
+                    //this.onStartTweak(tweak);
 
                     // if(tweak.type == msEnum.TWEAK_MOVE){
                     //     tweak.moveTo = new THREE.Vector3(tweak.moveTo.x, tweak.moveTo.y, 0.009);
@@ -360,7 +496,8 @@ export class mglLevelBuilder{
             } else {
                 const tweak = item.tweaks[0];
                 tweak.value = item.tweak.value();
-                this.onWorkTweak(tweak);
+                item.tweak.onTime?.();
+                //this.onWorkTweak(tweak);
 
                 // if(tweak.type == msEnum.TWEAK_MOVE){
                 //     const scale = tweak.scaleTo ? this.lerpValue(1, tweak.scaleTo, item.tweak.value()) : 1;
@@ -371,7 +508,8 @@ export class mglLevelBuilder{
                 // }
 
                 if(item.tweak.end()){
-                    this.onEndTweak(tweak);
+                    item.tweak.onEnd?.();
+                    //this.onEndTweak(tweak);
                     // if(tweak.type == msEnum.TWEAK_MOVE){
                     //     tweak.mesh.position.copy(tweak.moveTo);
 

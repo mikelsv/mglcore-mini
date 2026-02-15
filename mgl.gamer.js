@@ -48,23 +48,12 @@ let gamer = {
         this.gameData.new();
 
         if (savedData){
-            const gameData = JSON.parse(savedData); // Parsing data from a string
+            const gameData = (typeof savedData === 'string') ? JSON.parse(savedData) : savedData;
 
             this.gameData = {
                 ...this.gameData, // Existing data
                 ...gameData     // New data from saved JSON
             };
-
-            this.gameData.shop = {
-                ...new Object(), // Existing data
-                ...gameData.shop // New data from saved JSON
-            };
-
-            this.gameData.achieves = {
-                ...new Object(), // Existing data
-                ...gameData.achieves // New data from saved JSON
-            };
-
         }
 
         this.gameData.init();
@@ -72,6 +61,9 @@ let gamer = {
 
     saveGameData(){
         mglBuild.savePlayerData(this.projectName + 'gameData', JSON.stringify(this.gameData));
+
+        if(mglBuild.debug)
+            console.log('saveGameData', JSON.stringify(this.gameData));
     },
 
     resetGame(){
@@ -96,14 +88,6 @@ let gamer = {
 
     // Translations
     langs: {},
-
-    // Mouse
-    mouse: {
-        pressed: 0,
-        pos: new KiVec2(),
-        move: new KiVec2(),
-        scroll: 10
-    },
 
     // Debug
     debug: {},

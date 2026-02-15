@@ -40,8 +40,15 @@ export class mglInitSections{
 
         if(!options.canvas)
             Object.assign(canvas.style, {
+            'top': '0',
+            'left': '0',
+            'width': '100%',
+            'height': '100%',
+            'outline': 'none',
+            'position': 'fixed',
             'user-select': 'none',
-            'touch-action': 'manipulation',
+            'touch-action': 'none',
+            'overscroll-behavior': 'none',
             '-khtml-user-select': 'none',
             '-moz-user-select': 'none',
             '-ms-user-select': 'none',
@@ -49,12 +56,6 @@ export class mglInitSections{
             '-webkit-touch-callout': 'none',
             '-webkit-user-drag': 'none',
             '-webkit-user-select': 'none',
-            'position': 'fixed',
-            'top': '0',
-            'left': '0',
-            'width': '100%',
-            'height': '100%',
-            'outline': 'none'
         });
 
         // Body styles
@@ -84,7 +85,7 @@ export class mglInitSections{
 
     }
 
-    static async initSection(mglModels){
+    static async initSection(mglFiles){
         // Debug url
         const url = new URL(window.location.href);
         const mgldebugValue = url.searchParams.get("mgldebug");
@@ -110,7 +111,11 @@ export class mglInitSections{
         // Load game data
         gamer.loadGameData();
         mglBuild.updateLang();
-        mglModels.getScreen().setLoadingText(gamer.lang("LOADING_MESSAGE"));
+        mglFiles.getScreen().setLoadingText(gamer.lang("LOADING_MESSAGE"));
+
+        // Debug
+        if(gamer.gameData.debug)
+            mglBuild.debug = true;
 
         // Lock the context menu
         if(!mglBuild.debug && !url.searchParams.get("mglmenu")){
@@ -181,6 +186,18 @@ export class mglApp{
         this.mglFiles = new mglFilesLoader();
         this.mglFiles.setScreen(new mglLoadingScreen());
         gamer.mglFiles = this.mglFiles;
+
+        // Debug window
+        // const debug = new mglDebug({
+        //     debugOn: gamer.gameData.debug,
+        //     files: this.mglFiles.files,
+        //     setDebugMode: (debugOn) => {
+        //         gamer.gameData.debug = debugOn;
+        //         gamer.saveGameData();
+        //     }
+        // });
+
+        console.log();
 
         // User call
         this.onLoadApp();

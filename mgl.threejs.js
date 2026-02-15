@@ -10,12 +10,15 @@ import {TextGeometry} from 'three/addons/geometries/TextGeometry.js'
 
 export class mglLoadingScreen{
     loadingText = "Loading:";
-    coverPath = './assets/images/cover.png';
+    coverPath = './assets/images/cover.jpg';
+    isShowFiles = false;
 
     constructor(_options = {}){
         if(_options.coverPath)
             this.coverPath = _options.coverPath;
 
+        if(_options.showFiles)
+            this.isShowFiles = true;
 
         this.injectHtml();
     }
@@ -34,14 +37,24 @@ export class mglLoadingScreen{
         loadingPercentage.id = 'mglLoadingPercentage';
         loadingPercentage.textContent = '0%';
 
+        // Create an element for the bar container
+        const loadingBarContainer = document.createElement('div');
+        loadingBarContainer.id = 'mglLoadingBarContainer';
+
+        // Create an element for the bar
+        const loadingBar = document.createElement('div');
+        loadingBar.id = 'mglLoadingBar';
+
         // Create an element for the file information
         const loadingFiles = document.createElement('div');
         loadingFiles.id = 'mglLoadingFiles';
-        loadingFiles.textContent = '...';
+        loadingFiles.textContent = '';
 
         // Add elements to the container
         loadingScreen.appendChild(loadingImage);
         loadingScreen.appendChild(loadingPercentage);
+        loadingBarContainer.appendChild(loadingBar);
+        loadingScreen.appendChild(loadingBarContainer);
         loadingScreen.appendChild(loadingFiles);
 
         // Add a container to body
@@ -65,10 +78,6 @@ export class mglLoadingScreen{
                 z-index: 1000;
                 text-align: center;
             }
-            #mglLoadingPercentage {
-                font-size: 48px;
-                margin: 20px 0;
-            }
             #mglLoadingImage {
                 width: 100%;
                 height: 50%;
@@ -77,8 +86,49 @@ export class mglLoadingScreen{
                 background-position: center;
                 background-repeat: no-repeat;
             }
+            #mglLoadingPercentage {
+                font-size: 48px;
+                margin: 20px 0;
+            }
+            #mglLoadingBarContainer{
+                width: 300px;
+                height: 30px;
+                background-color: #f0f0f0;
+                border: 1px solid #ccc;
+                border-radius: 10px;
+                margin: 10px auto;
+                overflow: hidden;
+            }
+            #mglLoadingBar{
+                width: 0%;
+                height: 100%;
+                background: linear-gradient(90deg, #4CAF50, #B8DF4D);
+                border-radius: 10px;
+                transition: width 0.3s ease;
+            }
             #mglLoadingFiles {
                 margin-top: 10px;
+            }
+            #mglLoadingBar::after {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: linear-gradient(
+                    90deg,
+                    transparent 25%,
+                    rgba(255, 255, 255, 0.3) 50%,
+                    transparent 75%
+                );
+                background-size: 200% 100%;
+                animation: shimmer 2s infinite;
+            }
+
+            @keyframes shimmer {
+                0% { background-position: -200% 0; }
+                100% { background-position: 200% 0; }
             }
         `;
         document.head.appendChild(style);
@@ -90,7 +140,11 @@ export class mglLoadingScreen{
 
     updateScreen(perc, file){
         document.getElementById('mglLoadingPercentage').innerText = this.loadingText + ` ${perc}%`;
-        document.getElementById('mglLoadingFiles').innerText = file;
+        document.getElementById('mglLoadingBar').style.width = `${perc}%`;
+
+
+        if(this.isShowFiles)
+            document.getElementById('mglLoadingFiles').innerText = file;
     }
 
     setError(error){
@@ -98,7 +152,8 @@ export class mglLoadingScreen{
         document.getElementById('mglLoadingFiles').innerText = error;
     }
 
-    hideScreen() {
+    hideScreen(){
+        document.getElementById('mglLoadingBar').style.width = '100%';
         document.getElementById('mglLoadingScreen').style.display = 'none'; // Hide loading screen
     }
 };
@@ -291,6 +346,10 @@ export class mglFilesLoader{
         else{
             this.error = "mglFilesLoader.loadFileNext(): Unsupported file extension. " + file.url;
             this.state = mglFilesLoaderState.READY;
+
+            if(this.screen)
+                this.screen.setError(this.error);
+
             console.error(this.error);
             return ;
         }
@@ -299,9 +358,12 @@ export class mglFilesLoader{
         file.size = 0;
 
         if(this.screen){
-            let perc = this.files.length / (this.files.length + this.load.length) * 100;
+            let perc = this.files.length / (this.files.length + this.load.length + 1) * 100;
             if(!perc)
                 perc = 0;
+
+            // Debug
+            //console.log("mglFilesLoader.", `Files/load: ${this.files.length}/${this.files.length + this.load.length}.`, `Perc: ${perc}%.`);
 
             this.screen.updateScreen(Math.round(perc), file.name);
         }
@@ -365,10 +427,14 @@ export class mglAudioLoader{
     audio = [];
     tweaks = 0;
 
+    audioListener;
+
     load(camera, mglFilesLoader){
         // Make audio listener
         const listener = new THREE.AudioListener();
         camera.add(listener);
+
+        this.audioListener = listener;
 
         for(let i = 0; i < mglFilesLoader.files.length; i ++){
             let item = mglFilesLoader.files[i];
@@ -377,7 +443,8 @@ export class mglAudioLoader{
             if(ext == 'mp3' || ext == 'wav'){
                 let audio = {
                     name: item.name,
-                    sound: new THREE.Audio(listener)
+                    sound: new THREE.Audio(listener),
+                    buffer: item.data
                 };
 
                 item.used ++;
@@ -415,6 +482,23 @@ export class mglAudioLoader{
         }
         else
             console.error("mglAudioLoader.play(): " + name + ' not exist.');
+    }
+
+    // Multiple sound
+    playSound(name){
+        const audio = this.getAudio(name);
+        if(audio){
+            const sound = new THREE.Audio(this.audioListener);
+            sound.setBuffer(audio.buffer);
+            sound.setVolume(1);
+            sound.play();
+
+            sound.source.onended = () => {
+                sound.disconnect();
+            };
+        }
+        else
+            console.error("mglAudioLoader.playSound(): " + name + ' not exist.');
     }
 
     pause(name, tweak){
@@ -529,6 +613,61 @@ export class mglAudioLoader{
                 }
             }
         }
+    }
+};
+
+export class mglSounds{
+    audio = [];
+    audioVolume = 1;
+    enabled = 1;
+    listener;
+
+    load(camera, mglFilesLoader){
+        // Make audio listener
+        const listener = new THREE.AudioListener();
+        camera.add(listener);
+        this.listener = listener;
+
+        for(let i = 0; i < mglFilesLoader.files.length; i ++){
+            let item = mglFilesLoader.files[i];
+            const ext = mglFilesLoader.getFileExtension(item.url);
+
+            if(ext == 'mp3' || ext == 'wav'){
+                let audio = {
+                    name: item.name,
+                    sound: new THREE.Audio(listener)
+                };
+
+                item.used ++;
+
+                audio.sound.setBuffer(item.data);
+                this.audio.push(audio);
+            }
+        }
+    }
+
+    soundOn(on = true){
+        this.enabled = on;
+    }
+
+    soundOff(){
+        this.enabled = false;
+    }
+
+    play(name){
+        const audio = this.getAudio(name);
+        if(audio){
+            const sound = new THREE.Audio(this.listener);
+            sound.setBuffer(audio.sound);
+            sound.setVolume(this.audioVolume);
+            sound.play();
+
+            sound.source.onended = () => {
+                sound.disconnect();
+            };
+        }
+        else
+            console.error("mglSounds.play(): " + name + ' not exist.');
     }
 };
 

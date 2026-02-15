@@ -1,0 +1,7 @@
+{
+  "type": "module",
+  "dependencies": {
+    "adm-zip": "^0.5.16",
+    "esbuild": "^0.27.3"
+  }
+}

@@ -488,105 +488,226 @@ class mglConsole {
     }
 };
 
-// DEPRECATED AND DELETE
-class mglConsole2{
-    constructor(init = false) {
-        this.maxLines = 10;
-        this.isVisible = true;
-        this.isCollapse = false;
-        this.logContainer = null;
-        this.header = null;
+class mglDebug {
+    constructor({ debugOn = false, files = [], setDebugMode = undefined } = {}) {
+        this.debugOn = debugOn;
+        this.files = files;
+        this.setDebugMode = setDebugMode;
 
-        if(init)
-            this.init();
+        this.tapCount = 0;
+        this.lastTapTime = 0;
+        this.tapTimeout = 400;
+
+        this.overlay = null;
+
+        this._bindPointer();
+        this._createOverlay();
     }
 
-    init(){
-        // Make
-        const style = document.createElement('style');
-        style.textContent = `
-            #mglConsole {
-                position: fixed;
-                bottom: 0;
-                left: 0;
-                max-height: 200px;
-                overflow-y: auto;
-                background-color: rgba(0, 0, 0, 0.7);
-                color: white;
-                padding: 3px;
-                border-radius: .25rem;
-                font-family: monospace;
-                transition: height 0.3s;
+    /* =========================
+       INPUT
+    ========================= */
+
+    _bindPointer() {
+        window.addEventListener("pointerdown", (e) => {
+            if (!this._isInCorner(e.clientX, e.clientY)) return;
+
+            const now = performance.now();
+
+            if (now - this.lastTapTime < this.tapTimeout) {
+                this.tapCount++;
+            } else {
+                this.tapCount = 1;
             }
-            #mglConsoleHeader {
-                cursor: pointer;
-                background-color: rgba(255, 255, 255, 0.2);
-                padding: 5px;
-                margin-bottom: .2rem;
-                text-align: left;
+
+            this.lastTapTime = now;
+
+            if (this.tapCount >= 5) {
+                this.show();
+                this.tapCount = 0;
             }
-            .mglConsoleLine {
-                border-color: #d6d8db;
-                margin-bottom: .2rem;
-                padding: .2rem 1.00rem;
-                border: 1px solid #b8bfb7ba;
-                border-radius: .25rem;
-            }
+        });
+    }
+
+    _isInCorner(x, y) {
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        const zone = 80;
+
+        return (
+            (x < zone && y < zone) ||                 // top-left
+            (x > w - zone && y < zone) ||             // top-right
+            (x < zone && y > h - zone) ||             // bottom-left
+            (x > w - zone && y > h - zone)             // bottom-right
+        );
+    }
+
+    /* =========================
+       UI
+    ========================= */
+
+    _createOverlay() {
+        const root = document.createElement("div");
+        // root.style.cssText = `
+        //     position: fixed;
+        //     inset: 0;
+        //     background: rgba(0,0,0,0.75);
+        //     color: #fff;
+        //     font-family: monospace;
+        //     z-index: 99999;
+        //     display: none;
+        //     overflow: auto;
+        // `;
+
+        root.style.cssText = `
+            position: fixed;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(0,0,0,0.85) 0%, rgba(26,26,46,0.9) 100%);
+            color: #f0f0f0;
+            font-family: 'Segoe UI', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+            z-index: 2147483647;
+            display: none;
+            overflow: auto;
+            backdrop-filter: blur(10px);
+            transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            user-select: text;
         `;
-        document.head.appendChild(style);
 
-        // Создание контейнера для логов
-        this.logContainer = document.createElement('div');
-        this.logContainer.id = 'mglConsole';
+        const panel = document.createElement("div");
+        // panel.style.cssText = `
+        //     background: #111;
+        //     margin: 40px auto;
+        //     padding: 16px;
+        //     max-width: 900px;
+        //     border: 1px solid #444;
+        // `;
 
-        // Создание заголовка
-        this.header = document.createElement('div');
-        this.header.id = 'mglConsoleHeader';
-        this.header.textContent = 'Console>_';
-        this.header.onclick = () => this.toggleCollapse();
+        panel.style.cssText = `
+            background: linear-gradient(145deg, rgba(18,18,28,0.95) 0%, rgba(30,30,40,0.98) 100%);
+            margin: 20px auto;
+            padding: 32px;
+            max-width: 800px;
+            min-width: 320px;
+            border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+            box-shadow:
+                0 20px 60px rgba(0,0,0,0.3),
+                0 0 0 1px rgba(255,255,255,0.05),
+                inset 0 1px 0 rgba(255,255,255,0.1);
+            transform: translateY(20px);
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        `;
 
-        this.logContainer.appendChild(this.header);
-        document.body.appendChild(this.logContainer);
+        panel.innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+                <strong>mglDebug</strong>
+                <button data-close>✕</button>
+            </div>
 
-        this.setCollapse(1);
+            <div style="margin:12px 0;">
+                <button data-toggle></button>
+            </div>
+
+            <h3>Files</h3>
+            <div data-files></div>
+
+            <h3>File Types</h3>
+            <div data-types></div>
+        `;
+
+        root.appendChild(panel);
+        document.body.appendChild(root);
+
+        root.querySelector("[data-close]").onclick = () => this.hide();
+        root.querySelector("[data-toggle]").onclick = () => this.toggleDebug();
+
+        this.overlay = root;
+        this._render();
     }
 
-    log(...messages){
-        console.log(...messages);
+    show() {
+        this._render();
+        this.overlay.style.display = "block";
+    }
 
-        if(!this.logContainer)
-            return;
+    hide() {
+        this.overlay.style.display = "none";
+    }
 
-        const logEntry = document.createElement('div');
-        logEntry.className = 'mglConsoleLine';
+    toggleDebug(){
+        this.debugOn = !this.debugOn;
+        this.setDebugMode?.(this.debugOn);
+        this._render();
+    }
 
-        logEntry.textContent = messages.join(' ');
-        this.logContainer.appendChild(logEntry);
+    /* =========================
+       RENDER
+    ========================= */
 
-        // Delete old lines if the maximum number is exceeded
-        if (this.logContainer.children.length > this.maxLines + 1) {
-            this.logContainer.removeChild(this.logContainer.children[1]);
+    _render() {
+        this._renderToggle();
+        this._renderFiles();
+        this._renderTypes();
+    }
+
+    _renderToggle() {
+        const btn = this.overlay.querySelector("[data-toggle]");
+        btn.textContent = this.debugOn
+            ? "Disable Debug"
+            : "Enable Debug";
+    }
+
+    _renderFiles() {
+        const container = this.overlay.querySelector("[data-files]");
+        container.innerHTML = this._makeTable(
+            ["File", "Size (KB)"],
+            this.files.map(f => [
+                f.url,
+                (f.size / 1024).toFixed(2)
+            ])
+        );
+    }
+
+    _renderTypes() {
+        const stats = {};
+
+        for (const f of this.files) {
+            const type = f.url.split(".").pop().toLowerCase();
+            if (!stats[type]) {
+                stats[type] = { count: 0, size: 0 };
+            }
+            stats[type].count++;
+            stats[type].size += f.size;
         }
 
-        // Scroll down to show the latest log
-        if(this.isVisible)
-            this.logContainer.scrollTop = this.logContainer.scrollHeight;
+        const rows = Object.entries(stats).map(
+            ([type, data]) => [
+                type,
+                data.count,
+                (data.size / 1024).toFixed(2)
+            ]
+        );
+
+        const container = this.overlay.querySelector("[data-types]");
+        container.innerHTML = this._makeTable(
+            ["Type", "Count", "Total Size (KB)"],
+            rows
+        );
     }
 
-    setCollapse(value){
-        this.isCollapse = value;
-        this.logContainer.style.height = this.isCollapse ? '0' : 'auto';
-        this.header.style.paddingTop = this.isCollapse ? '20px' : '0';
+    _makeTable(headers, rows) {
+        const th = headers.map(h => `<th>${h}</th>`).join("");
+        const tr = rows.map(
+            r => `<tr>${r.map(v => `<td>${v}</td>`).join("")}</tr>`
+        ).join("");
 
-
-       // this.logContainer.style.bottom = this.isCollapse ? '10px' : '20px';
+        return `
+            <table border="1" cellspacing="0" cellpadding="4">
+                <thead><tr>${th}</tr></thead>
+                <tbody>${tr}</tbody>
+            </table>
+        `;
     }
-
-    toggleCollapse(){
-        this.setCollapse(!this.isCollapse);
-    }
-
-    setVisible(value){
-        this.logContainer.style.visibility = value ? 'visible' : 'hidden';
-    }
-};
+}

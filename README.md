@@ -1,2 +1,2 @@
 # mglcore-mini
-MyGL Core mini build
+MyGL Core mini - Mini version of mglcore for builds.

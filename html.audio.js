@@ -33,7 +33,7 @@
             this.sounds[name] = new Audio(sound);
         });
 
-      this.updateSfxVolume();
+      this.updateSoundVolume();
       this.setupVisibilityHandlers();
     }
 

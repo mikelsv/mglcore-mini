@@ -15,6 +15,15 @@ let mglBuild = {
         BONUS_CLOSE: 4
     },
 
+    leaderboardFlags: {
+        GET: 1,
+        SET: 2,
+        GETSET: 3,
+        REPLACE: 4,
+        SETREP: 6,
+        GETSETREP: 7
+    },
+
     init(){
         mglBuild.log("mglBuild.init() for ", this.platform);
     },
@@ -76,13 +85,66 @@ let mglBuild = {
         })
     },
 
-    updateLang(){
-        if(this.ysdk.environment.i18n.lang){
-            mglBuild.log("mglBuild. i18n.lang", this.ysdk.environment.i18n.lang);
-            if(this.ysdk.environment.i18n.lang == "ru")
-                gamer.gameData.lang = "ru";
-            else
-                gamer.gameData.lang = "en";
+    // Leaderboards
+    async autoLeaderboard(leaderboardName, newScore, flags){
+        try {
+            // Methods avalilable
+            const [canGetEntry, canSetScore, canGetEntries] = await Promise.all([
+                this.ysdk.isAvailableMethod('leaderboards.getPlayerEntry'),
+                this.ysdk.isAvailableMethod('leaderboards.setScore'),
+                this.ysdk.isAvailableMethod('leaderboards.getEntries')
+            ]);
+
+            if (!canGetEntry || !canSetScore) {
+                console.warn('mglBuild.autoLeaderboard(). Leaderboards are unavailable (the user may not be logged in).');
+                return;
+            }
+
+            // Current score
+            let currentScore = 0;
+
+            // Get last value
+            if ((flags & this.leaderboardFlags.SET) && !(flags & this.leaderboardFlags.REPLACE)) {
+            try {
+                const res = await this.ysdk.leaderboards.getPlayerEntry(leaderboardName);
+                currentScore = res.score;
+            } catch (e) {
+                console.log('mglBuild.autoLeaderboard(). The player is not yet featured on the leaderboard.');
+            }
+
+            // If the new score is higher, update (whole numbers only)
+            if((flags & this.leaderboardFlags.SET) && newScore > currentScore)
+                await this.ysdk.leaderboards.setScore(leaderboardName, Math.floor(newScore));
+                console.log('mglBuild.autoLeaderboard(). Account updated successfully!');
+            }
+
+            // No GET -> exit
+            if(!(flags & this.leaderboardFlags.GET))
+                return ;
+
+            if (canGetEntries) {
+                const topPlayers = await this.ysdk.leaderboards.getEntries(leaderboardName, {
+                    quantityTop: 10,
+                    includeUser: true
+                });
+
+                // Formatting
+                if(!topPlayers || !topPlayers.entries)
+                    return ;
+
+                const formattedResult = topPlayers.entries.map((entry) => ({
+                    playerId: entry.player.uniqueID,
+                    rank: entry.rank,
+                    name: entry.player.publicName,
+                    avatar: entry.player.getAvatarSrc('small'),
+                    score: entry.score
+                }));
+
+                return formattedResult;
+            }
+
+        } catch (error) {
+            console.error('mglBuild.autoLeaderboard(). Leaderboard error:', error);
         }
     },
 
@@ -157,9 +219,19 @@ let mglBuild = {
         return false;
     },
 
+    updateLang(){
+        if(this.ysdk.environment.i18n.lang){
+            mglBuild.log("mglBuild. i18n.lang", this.ysdk.environment.i18n.lang);
+            if(this.ysdk.environment.i18n.lang == "ru")
+                gamer.gameData.lang = "ru";
+            else
+                gamer.gameData.lang = "en";
+        }
+    },
+
     // Auth html message
-    getAuthHtml(){
-        return '<span style="color: #f1c40f; cursor: pointer;" onclick="ysdk.auth.openAuthDialog()">Войти</span>';
+    getAuthHtml(text = 'Clickt to auth'){
+        return `<a href='#' onclick="ysdk.auth.openAuthDialog()">${text}</a>`;
     }
 };
 

@@ -25,6 +25,7 @@ let gamer = {
 
     base: {
         // Base values
+        lang: 'en',
 
         update(){
             // update generate values
@@ -61,17 +62,6 @@ let gamer = {
                 ...this.gameData, // Existing data
                 ...gameData     // New data from saved JSON
             };
-
-            // this.gameData.shop = {
-            //     ...new Object(), // Existing data
-            //     ...gameData.shop // New data from saved JSON
-            // };
-
-            // this.gameData.achieves = {
-            //     ...new Object(), // Existing data
-            //     ...gameData.achieves // New data from saved JSON
-            // };
-
         }
 
         this.gameData.init();

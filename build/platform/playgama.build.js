@@ -1,8 +1,9 @@
 let mglBuild = {
     project: "RPC_MGL_PROJECT",
-    build: "RPC_MGL_BUILD",
     platform: "playgama",
     debug: false,
+    build: "RPC_MGL_BUILD",
+    advertising: true,
 
     bonusFlags: {
         BONUS_OPEN: 1,
@@ -19,13 +20,15 @@ let mglBuild = {
     },
 
     startLevel(){
-        window.Playgama.sdk.game.gameplayStart();
+        mglBuild.log("mglBuild. Level started!");
         bridge.platform.sendMessage("gameplay_started");
+        this.startedLevel = true;
     },
 
     stopLevel(){
-        window.Playgama.sdk.game.gameplayStop();
+        mglBuild.log("mglBuild. Level stopped!");
         bridge.platform.sendMessage("gameplay_stopped");
+        this.startedLevel = false;
     },
 
     loadPlayerData(key){
@@ -71,6 +74,10 @@ let mglBuild = {
 
     updateLang(){
         gamer.gameData.lang = bridge.platform.language;
+    },
+
+    showAdversite(){
+        bridge.advertisement.showInterstitial();
     },
 
     getSdkScripts(){

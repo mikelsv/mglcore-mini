@@ -2,6 +2,7 @@ import AdmZip from 'adm-zip';
 import esbuild from 'esbuild';
 import fs from 'fs';
 import path from 'path';
+import { pathToFileURL } from 'url';
 
 const projectDir = path.resolve(process.argv[2]);
 const outDir = path.resolve(process.argv[3]);
@@ -26,15 +27,6 @@ class mglBundle {
 
     async makeBuild(){
         // Read gamer
-        //const filePath = path.join(projectDir, 'gamer.js');
-        //const data = fs.readFileSync(filePath, 'utf8');
-
-        //const projectNameMatch = data.match(/gamer\.projectName\s*=\s*"([^"]+)"/);
-        //projectName = projectNameMatch ? projectNameMatch[1] : null;
-
-        //const projectVersMatch = data.match(/gamer\.projectVers\s*=\s*\[[^\[]*\[[^\[]*"([\d.]+)"/);
-        //projectVer = projectVersMatch ? projectVersMatch[1] : null;
-
         const gamerData = fs.readFileSync(path.join(projectDir, 'gamer.js'), 'utf8');
         eval(gamerData);
 
@@ -50,22 +42,63 @@ class mglBundle {
 
         // Ignore mask
         if(gamer.build?.ignoreFiles){
-            const regexSource = gamer.build.ignoreFiles
-                .replace(/\./g, '\\.')
-                .replace(/\*/g, '.*');
+            const masks = gamer.build.ignoreFiles.split(',').map(s => s.trim());
 
-            this.ignoreMask = new RegExp(`^${regexSource}$`, 'i');
+            // const regexSource = gamer.build.ignoreFiles
+            //     .replace(/\./g, '\\.')
+            //     .replace(/\*/g, '.*');
+
+            // this.ignoreMask = new RegExp(`^${regexSource}$`, 'i');
+
+            // 2. Превращаем каждую маску в валидный Regex-паттерн
+            const patterns = masks.map(m => {
+                return m
+                    .replace(/[.+^${}()|[\]\\]/g, '\\$&') // Экранируем всё, что может сломать RegExp
+                    .replace(/\*/g, '.*');               // Звездочку превращаем в "любые символы"
+            });
+
+            // 3. Собираем в один RegExp через | (ИЛИ)
+            this.ignoreMask = new RegExp(`^(${patterns.join('|')})$`, 'i');
         }
 
         // Copy all files from projectDir to releaseDir
         this.copyFilesSync(projectDir, releaseDir);
 
         //Copy the $buildPlatform.build.js file to a new name build.js
-        fs.copyFileSync(path.join("platform", buildPlatform + ".build.js"), path.join(releaseDir, "mglcore/mgl.build.js"));
+        fs.copyFileSync(path.join("platform", buildPlatform + ".build.js"), path.join(releaseDir, "build.js"));
 
         // Replace the data in the file build.js
-        this.replaceTextInFile(releaseDir + "/mglcore/mgl.build.js", '"RPC_MGL_PROJECT"', '"' + projectName +'"');
-        this.replaceTextInFile(releaseDir + "/mglcore/mgl.build.js", '"RPC_MGL_BUILD"', `"${projectVer}(${projectDate})` + this.getCurrentDateTime() +'"')
+        this.replaceTextInFile(releaseDir + "/build.js", '"RPC_MGL_PROJECT"', '"' + projectName +'"');
+        this.replaceTextInFile(releaseDir + "/build.js", '"RPC_MGL_BUILD"', `"${projectVer}(${projectDate})` + this.getCurrentDateTime() +'"')
+
+        // Make clean html
+        const buildPath = path.resolve(releaseDir, 'build.js');
+        const { mglBuild } = await import(pathToFileURL(buildPath).href);
+        let mglReq;
+        //let mglBuild = require("./" + releaseDir + '/build.js').mglBuild;
+
+        if(fs.existsSync("./" + releaseDir + '/package.js')){
+            const file = path.resolve(releaseDir, 'package.js');
+            mglReq = await import(pathToFileURL(file).href);
+        } else {
+            const file = path.resolve(releaseDir, 'mglcore/mgl.package.js');
+            mglReq = await import(pathToFileURL(file).href);
+        }
+
+        mglReq.mglPackage.mglLibPath = './';
+        mglReq.mglPackage.mglExtScripts = mglBuild.getSdkScripts();
+        mglReq.mglPackage.mglExtScripts.push(
+            { src: 'build.js', local: true }
+        );
+
+        mglReq.mglPackage.mglExtScripts.push(
+            { code: '<script>const mglPackage = { mglLibPath: "./" };</script>' }
+        );
+
+        fs.writeFile(releaseDir + "/mglcore/mgl.build.js", '', (err) => {});
+
+        // Write clean html
+        this.replacemglImportText(releaseDir + "/index.html", mglReq.mglPackage.makeCleanHtml());
 
         // Build
         const files = this.getAllFiles(releaseDir);
@@ -76,7 +109,7 @@ class mglBundle {
 
         // esbuild options common to JS and CSS
         const buildOptions = {
-            minify: true,
+            minify: gamer.build.minify,
             allowOverwrite: true,
             outdir: releaseDir, // Write the result back to the release folder
             outbase: releaseDir, // Preserve the subfolder hierarchy
@@ -172,8 +205,10 @@ class mglBundle {
             const targetPath = path.join(targetDir, item);
 
             // Apply a mask to ignore files
-            if(this.ignoreMask && this.ignoreMask.test(item))
+            if(this.ignoreMask && this.ignoreMask.test(item)){
+                //console.log("ignore", item);
                 return ;
+            }
 
             // Check if the element is a directory
             if (fs.statSync(sourcePath).isDirectory()) {
@@ -209,6 +244,30 @@ class mglBundle {
 
         // Write the updated contents back to the file
         fs.writeFileSync(filePath, updatedContent, 'utf8');
+    }
+
+    replacemglImportText(filePath, text) {
+        // Read file contents
+        fs.readFile(filePath, 'utf8', (err, data) => {
+            if (err) {
+                console.error('Error reading file:', err);
+                return;
+            }
+
+            // Regular expression for searching for the <script mgl_import>...</script> block
+            const regex = /<div mgl_package>[\s\S]*?<\/div>/g;
+
+            // Replace the found block with new text
+            const result = data.replace(regex, text);
+
+            // Write the changed contents back to the file
+            fs.writeFile(filePath, result, 'utf8', (err) => {
+                if (err) {
+                    console.error('Error writing file:', err);
+                    return;
+                }
+            });
+        });
     }
 
     getCurrentDateTime() {

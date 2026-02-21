@@ -34,12 +34,6 @@ let mglBuild = {
         //this.ysdk.features.GameplayAPI.start();
     },
 
-    startGame(){
-        mglBuild.log("mglBuild. Game started! But, this call is deprecated! Use startApp().");
-        this.ysdk.features.LoadingAPI.ready();
-        //this.ysdk.features.GameplayAPI.start();
-    },
-
     startLevel(){
         this.startedLevel = true;
         mglBuild.log("mglBuild. Level started!");
@@ -208,10 +202,35 @@ let mglBuild = {
         }
     },
 
-    getSdkScripts(){
-        return [
-            { src: '/sdk.js', local: true}
-        ];
+    // Adversiting
+    showAdversiteInterstitial() {
+        const config = gamer.advertise.interstitial;
+        const currentTime = Date.now() / 1000;
+
+        // Проверяем: включена ли реклама и прошло ли время
+        if (config.enable && (currentTime - config.lastTime >= config.interval)) {
+
+            ysdk.adv.showFullscreenAdv({
+                callbacks: {
+                    onOpen: () => {
+                        // Ставим игру на паузу и выключаем звук
+                        console.log('mglBuild. Ad opened');
+                    },
+                    onClose: (wasShown) => {
+                        //if (wasShown) {
+                            config.lastTime = Date.now() / 1000; // Обновляем время только при успешном показе
+                        //}
+                        // Снимаем игру с паузы
+                        console.log('mglBuild Ad closed', wasShown);
+                    },
+                    onError: (error) => {
+                        console.error('mglBuild Ad error:', error);
+                    }
+                }
+            });
+        } else {
+            console.log('mglBuild Ad skipped: cooldown or disabled');
+        }
     },
 
     // Local language control
@@ -232,6 +251,12 @@ let mglBuild = {
     // Auth html message
     getAuthHtml(text = 'Clickt to auth'){
         return `<a href='#' onclick="ysdk.auth.openAuthDialog()">${text}</a>`;
+    },
+
+    getSdkScripts(){
+        return [
+            { src: '/sdk.js', local: true}
+        ];
     }
 };
 

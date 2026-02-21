@@ -76,7 +76,8 @@ let mglBuild = {
         gamer.gameData.lang = bridge.platform.language;
     },
 
-    showAdversite(){
+    // Adversiting
+    showAdversiteInterstitial() {
         bridge.advertisement.showInterstitial();
     },
 

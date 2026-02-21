@@ -1,132 +1,108 @@
-//(() => {
-  class AudioManager {
-    constructor(config = {}) {
-        const {
-            music = undefined,
-            sounds = undefined,
-            musicVolume = 1,
-            soundVolume = 1,
-            autoPlay = 1
-        } = config;
+class AudioManager {
+  constructor(config = {}) {
+    const {
+      music = undefined,
+      sounds = undefined,
+      musicVolume = 1,
+      soundVolume = 1,
+      autoPlay = 1
+    } = config;
 
-      this.musicVolume = musicVolume;
-      this.soundVolume = soundVolume;
-      this.wasPlayingBeforeBlur = false;
+    // Инициализируем аудио-контекст (Web Audio API)
+    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    this.musicVolume = musicVolume;
+    this.soundVolume = soundVolume;
 
-    // Muscic
-    if(music){
-        this.music = new Audio(music);
-        this.music.loop = true;
-        this.music.volume = this.musicVolume;
+    // Громкость для музыки и звуков через GainNode
+    this.musicGain = this.ctx.createGain();
+    this.musicGain.connect(this.ctx.destination);
+    this.musicGain.gain.value = this.musicVolume;
 
-        if(autoPlay)
-            window.addEventListener('click', () => {
-                this.music.play();
-            }, { once: true });
-    }
+    this.soundGain = this.ctx.createGain();
+    this.soundGain.connect(this.ctx.destination);
+    this.soundGain.gain.value = this.soundVolume;
 
-    this.sounds = {};
+    this.musicBuffer = null;
+    this.musicSource = null;
+    this.soundsBuffers = {};
 
-    if(sounds)
-        sounds.forEach(sound => {
-            const name = sound.split('/').pop().replace(/\.[^/.]+$/, "");
-            this.sounds[name] = new Audio(sound);
-        });
-
-      this.updateSoundVolume();
-      this.setupVisibilityHandlers();
-    }
-
-    setupVisibilityHandlers() {
-      document.addEventListener('visibilitychange', () => {
-        if (document.hidden) {
-          this.pauseForExternalReason();
-        } else {
-          this.resumeAfterExternalReason();
+    // Загрузка музыки
+    if (music) {
+      this.loadBuffer(music).then(buffer => {
+        this.musicBuffer = buffer;
+        if (autoPlay) {
+          window.addEventListener('click', () => {
+            if (this.ctx.state === 'suspended') this.ctx.resume();
+            this.playMusic();
+          }, { once: true });
         }
       });
+    }
 
-      window.addEventListener('blur', () => {
-        this.pauseForExternalReason();
+    // Загрузка звуков
+    if (sounds) {
+      sounds.forEach(url => {
+        const name = url.split('/').pop().replace(/\.[^/.]+$/, "");
+        this.loadBuffer(url).then(buffer => {
+          this.soundsBuffers[name] = buffer;
+        });
       });
-
-      window.addEventListener('focus', () => {
-        this.resumeAfterExternalReason();
-      });
     }
 
-    readVolume(key, fallback) {
-      const parsed = parseFloat(window.localStorage.getItem(key));
-      if (Number.isFinite(parsed)) {
-        return Math.min(1, Math.max(0, parsed));
-      }
-      return fallback;
-    }
+    this.setupVisibilityHandlers();
+  }
 
-    playMusic() {
-      if (this.music?.paused) {
-        this.music.play().catch(() => {});
-      }
-    }
+  async loadBuffer(url) {
+    const response = await fetch(url);
+    const arrayBuffer = await response.arrayBuffer();
+    return await this.ctx.decodeAudioData(arrayBuffer);
+  }
 
-    stopMusic() {
-      this.wasPlayingBeforeBlur = false;
-      this.music.pause();
-    }
+  playMusic() {
+    if (!this.musicBuffer) return;
+    if (this.musicSource) this.musicSource.stop();
 
-    pauseForExternalReason() {
-        if(!this.music)
-            return ;
+    this.musicSource = this.ctx.createBufferSource();
+    this.musicSource.buffer = this.musicBuffer;
+    this.musicSource.loop = true;
+    this.musicSource.connect(this.musicGain);
+    this.musicSource.start();
+  }
 
-      if (!this.music.paused) {
-        this.wasPlayingBeforeBlur = true;
-        this.music.pause();
-      }
-    }
-
-    resumeAfterExternalReason() {
-      if (document.hidden) return;
-
-      if (this.wasPlayingBeforeBlur) {
-        this.wasPlayingBeforeBlur = false;
-        this.playMusic();
-      }
-    }
-
-    pauseForAd() {
-      this.pauseForExternalReason();
-    }
-
-    resumeAfterAd() {
-      this.resumeAfterExternalReason();
-    }
-
-    playSound(soundName) {
-      const sound = this.sounds[soundName];
-      if (!sound) return;
-      sound.pause();
-      sound.currentTime = 0;
-      sound.play().catch(() => {});
-    }
-
-    setMusicVolume(value) {
-      const safeValue = Math.min(1, Math.max(0, Number(value) || 0));
-      this.musicVolume = safeValue;
-      this.music.volume = safeValue;
-    }
-
-    setSoundVolume(value) {
-      const safeValue = Math.min(1, Math.max(0, Number(value) || 0));
-      this.soundVolume = safeValue;
-      this.updateSoundVolume();
-    }
-
-    updateSoundVolume() {
-      Object.values(this.sounds).forEach((sound) => {
-        sound.volume = this.soundVolume;
-      });
+  stopMusic() {
+    if (this.musicSource) {
+      this.musicSource.stop();
+      this.musicSource = null;
     }
   }
 
-  //window.audioManager = window.audioManager || new AudioManager();
-//}//)();
+  playSound(name) {
+    const buffer = this.soundsBuffers[name];
+    if (!buffer) return;
+
+    const source = this.ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(this.soundGain);
+    source.start();
+  }
+
+  setupVisibilityHandlers() {
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        this.ctx.suspend(); // Приостанавливает весь звук контекста
+      } else {
+        this.ctx.resume();
+      }
+    });
+  }
+
+  setMusicVolume(value) {
+    this.musicVolume = Math.min(1, Math.max(0, value));
+    this.musicGain.gain.setTargetAtTime(this.musicVolume, this.ctx.currentTime, 0.01);
+  }
+
+  setSoundVolume(value) {
+    this.soundVolume = Math.min(1, Math.max(0, value));
+    this.soundGain.gain.setTargetAtTime(this.soundVolume, this.ctx.currentTime, 0.01);
+  }
+}

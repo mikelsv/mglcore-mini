@@ -55,8 +55,8 @@ let gamer = {
         const savedData = mglBuild.loadPlayerData(this.projectName + 'gameData');
         this.gameData.new();
 
-        if (savedData){
-            const gameData = JSON.parse(savedData); // Parsing data from a string
+        if (savedData) {
+            const gameData = (typeof savedData === 'string') ? JSON.parse(savedData) : savedData; // Parsing data from a string
 
             this.gameData = {
                 ...this.gameData, // Existing data

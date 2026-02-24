@@ -324,7 +324,7 @@ export class mglFilesLoader{
         let loader;
 
         // Loader
-        if(ext == 'png' || ext == 'jpg')
+        if(ext == 'png' || ext == 'jpg' || ext == 'webp')
             loader = new THREE.TextureLoader();
         else if(ext == 'svg')
             loader = new SVGLoader();

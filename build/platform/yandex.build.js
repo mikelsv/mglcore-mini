@@ -12,7 +12,8 @@ let mglBuild = {
         BONUS_OPEN: 1,
         BONUS_REWARDED: 2,
         BONUS_ERROR: 3,
-        BONUS_CLOSE: 4
+        BONUS_CLOSE: 4,
+        BONUS_SKIP: 5
     },
 
     leaderboardFlags: {
@@ -60,8 +61,9 @@ let mglBuild = {
         });
     },
 
-    showReward(callback){
-        this.ysdk.adv.showRewardedVideo({
+    // Adversiting
+    async showReward(callback){
+        await this.ysdk.adv.showRewardedVideo({
             callbacks: {
                 onOpen: () => {
                     callback(this.bonusFlags.BONUS_OPEN);
@@ -77,6 +79,39 @@ let mglBuild = {
                 }
             }
         })
+    },
+
+    async showAdversiteInterstitial(callback) {
+        const config = gamer.advertise.interstitial;
+        const currentTime = Date.now() / 1000;
+
+        // Проверяем: включена ли реклама и прошло ли время
+        if (config.enable && (currentTime - config.lastTime >= config.interval)) {
+            await ysdk.adv.showFullscreenAdv({
+                callbacks: {
+                    onOpen: () => {
+                        // Ставим игру на паузу и выключаем звук
+                        console.log('mglBuild. Ad opened');
+                        callback(this.bonusFlags.BONUS_OPEN);
+                    },
+                    onClose: (wasShown) => {
+                        //if (wasShown) {
+                            config.lastTime = Date.now() / 1000; // Обновляем время только при успешном показе
+                        //}
+                        // Снимаем игру с паузы
+                        console.log('mglBuild Ad closed', wasShown);
+                        callback(this.bonusFlags.BONUS_CLOSE, wasShown);
+                    },
+                    onError: (error) => {
+                        console.error('mglBuild Ad error:', error);
+                        callback(this.bonusFlags.BONUS_ERROR);
+                    }
+                }
+            });
+        } else {
+            callback(this.bonusFlags.BONUS_CLOSE, false);
+            console.log('mglBuild Ad skipped: cooldown or disabled');
+        }
     },
 
     // Leaderboards
@@ -199,37 +234,6 @@ let mglBuild = {
 
         } catch (error) {
             console.error('Ошибка работы с лидербордом:', error);
-        }
-    },
-
-    // Adversiting
-    showAdversiteInterstitial() {
-        const config = gamer.advertise.interstitial;
-        const currentTime = Date.now() / 1000;
-
-        // Проверяем: включена ли реклама и прошло ли время
-        if (config.enable && (currentTime - config.lastTime >= config.interval)) {
-
-            ysdk.adv.showFullscreenAdv({
-                callbacks: {
-                    onOpen: () => {
-                        // Ставим игру на паузу и выключаем звук
-                        console.log('mglBuild. Ad opened');
-                    },
-                    onClose: (wasShown) => {
-                        //if (wasShown) {
-                            config.lastTime = Date.now() / 1000; // Обновляем время только при успешном показе
-                        //}
-                        // Снимаем игру с паузы
-                        console.log('mglBuild Ad closed', wasShown);
-                    },
-                    onError: (error) => {
-                        console.error('mglBuild Ad error:', error);
-                    }
-                }
-            });
-        } else {
-            console.log('mglBuild Ad skipped: cooldown or disabled');
         }
     },
 

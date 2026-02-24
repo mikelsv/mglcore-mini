@@ -132,6 +132,19 @@ export class mglInitSections{
 export class mglApp{
     lastTime = 0;
 
+    constructor(){
+        this.mglFiles = new mglFilesLoader();
+    }
+
+    // Files
+    preloadFile(id, file){
+        return this.mglFiles.loadFile(id, file);
+    }
+
+    getFile(id){
+        return this.mglFiles.getFile(id);
+    }
+
     // Load section call
     onLoadApp(mglFiles){
         // this.mglFiles.loadFile('name', 'url');
@@ -183,7 +196,6 @@ export class mglApp{
         //mglInitSections.renderSection({ alpha: true, shadow: true });
 
         // [Load section]
-        this.mglFiles = new mglFilesLoader();
         this.mglFiles.setScreen(new mglLoadingScreen());
         gamer.mglFiles = this.mglFiles;
 
@@ -259,8 +271,6 @@ export class mglApp{
 
         // User call
         this.onAnimateApp(time, this.deltaTime);
-
-        //console.log(renderer);
 
         // Render
         renderer.render(scene, camera);

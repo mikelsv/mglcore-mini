@@ -64,6 +64,10 @@ class mglBundle {
         // Copy all files from projectDir to releaseDir
         this.copyFilesSync(projectDir, releaseDir);
 
+        // MyGL Core copy
+        fs.copyFileSync(path.join("../", "mgl.core.js"), path.join(releaseDir, "mglcore", "mgl.core.js"));
+        fs.copyFileSync(path.join("../", "mgl.package.js"), path.join(releaseDir, "mglcore", "mgl.package.js"));
+
         //Copy the $buildPlatform.build.js file to a new name build.js
         fs.copyFileSync(path.join("platform", buildPlatform + ".build.js"), path.join(releaseDir, "build.js"));
 

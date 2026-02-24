@@ -95,8 +95,19 @@ export class mglLevelBuilder{
          return this.gitems.filter(item => item.type == type);
     }
 
+    disposeGitem(gitem){
+        const mesh = gitem.mesh;
+
+        if (mesh.geometry) mesh.geometry.dispose();
+        if (mesh.material) {
+            if (mesh.material.map) mesh.material.map.dispose();
+            mesh.material.dispose();
+        }
+    }
+
     removeGitem(gitem){
         scene.remove(gitem.mesh);
+        this.disposeGitem(gitem);
         //console.log('removeGitem', gitem);
 
         const index = this.gitems.indexOf(gitem);

@@ -26,6 +26,8 @@ class AudioManager {
     this.musicSource = null;
     this.soundsBuffers = {};
 
+    this.pauseAd = false;
+
     // Загрузка музыки
     if (music) {
       this.loadBuffer(music).then(buffer => {
@@ -86,9 +88,19 @@ class AudioManager {
     source.start();
   }
 
+  pauseForAd(){
+    this.pauseAd = true;
+    this.ctx.suspend();
+  }
+
+  resumeAfterAd(){
+    this.pauseAd = false;
+      this.ctx.resume();
+  }
+
   setupVisibilityHandlers() {
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden) {
+      if (document.hidden || this.pauseAd) {
         this.ctx.suspend(); // Приостанавливает весь звук контекста
       } else {
         this.ctx.resume();

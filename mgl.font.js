@@ -218,3 +218,106 @@ export class mglFontTextureGen{
         return indices;
     }
 };
+
+export const mglTextSprite = {
+    createTextSpriteAspect4(text, options = {}) {
+        const {
+            width = 512,
+            height = 128,
+            font = '700 64px Arial',
+            color = '#f5f8ff',
+            strokeColor = '#1a1f33',
+            strokeWidth = 8,
+            scaleX = 3.6,
+            scaleY = 0.65,
+            preserveAspect = true
+        } = options;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+
+        ctx.clearRect(0, 0, width, height);
+        ctx.font = font;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.lineJoin = 'round';
+
+        if (strokeWidth > 0) {
+            ctx.lineWidth = strokeWidth;
+            ctx.strokeStyle = strokeColor;
+            ctx.strokeText(text, width * 0.5, height * 0.52);
+        }
+
+        ctx.fillStyle = color;
+        ctx.fillText(text, width * 0.5, height * 0.52);
+
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.needsUpdate = true;
+
+        return texture;
+    },
+
+    createTextSpriteExt(text, options = {}) {
+        const {
+            fontSize = 64,
+            fontFamily = 'Arial',
+            fontWeight = '700',
+            color = '#f5f8ff',
+            strokeColor = '#1a1f33',
+            strokeWidth = 8,
+            padding = 20 // Отступы, чтобы края не обрезались
+        } = options;
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const font = `${fontWeight} ${fontSize}px ${fontFamily}`;
+
+        ctx.font = font;
+
+        // 1. Измеряем текст для динамического размера холста
+        const metrics = ctx.measureText(text);
+        const textWidth = metrics.width;
+        const textHeight = fontSize; // Приблизительная высота для базовой линии
+
+        canvas.width = textWidth + padding * 2;
+        canvas.height = textHeight + padding * 2;
+
+        // 2. Отрисовка (после изменения размера холста контекст сбрасывается)
+        ctx.font = font;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.lineJoin = 'round';
+
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+
+        if (strokeWidth > 0) {
+            ctx.lineWidth = strokeWidth;
+            ctx.strokeStyle = strokeColor;
+            ctx.strokeText(text, centerX, centerY);
+        }
+
+        ctx.fillStyle = color;
+        ctx.fillText(text, centerX, centerY);
+
+        // 3. Создание текстуры
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.colorSpace = THREE.SRGBColorSpace;
+
+        // 4. Расчет правильного соотношения сторон для спрайта/плоскости
+        const aspect = canvas.width / canvas.height;
+
+        // Возвращаем объект, чтобы в шейдер передать и текстуру, и аспект
+        return {
+            texture,
+            aspect,
+            width: canvas.width,
+            height: canvas.height
+        };
+    }
+
+
+};

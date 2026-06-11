@@ -25,10 +25,6 @@ var mglBuild = {
         mglBuild.log("mglBuild. App started!");
     },
 
-    startGame(){
-        mglBuild.log("mglBuild. Game started! But, this call is deprecated! Use startApp().");
-    },
-
     startLevel(){
         this.startedLevel = true;
         mglBuild.log("mglBuild. Level started!");
@@ -64,7 +60,6 @@ var mglBuild = {
     },
 
     // Liderboards
-        // Liderboards
     async autoLeaderboard(leaderboardName, score, flags){
         // Имя ключа в localStorage зависит от названия лидерборда
         const storageKey = gamer.projectName + `local_lb_${leaderboardName}`;
@@ -189,7 +184,7 @@ var mglBuild = {
 
         // 3. Добавляем текущего игрока-гостя
         players.push({
-            playerId: 'guest_id', // Тот самый ID
+            playerId: gamer.playerId, // Тот самый ID
             name: 'Guest',
             avatar: '',
             score: currentScore

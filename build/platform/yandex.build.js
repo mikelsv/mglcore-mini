@@ -153,7 +153,9 @@ let mglBuild = {
 
             if (canGetEntries) {
                 const topPlayers = await this.ysdk.leaderboards.getEntries(leaderboardName, {
-                    quantityTop: 10,
+                    quantityTop: 0,
+                    //quantityTop: 10,
+                    quantityAround: 5,
                     includeUser: true
                 });
 
@@ -259,7 +261,7 @@ let mglBuild = {
 
     getSdkScripts(){
         return [
-            { src: '/sdk.js', local: true}
+            { src: '/sdk.js', bundle_ignore: true, local: true}
         ];
     }
 };

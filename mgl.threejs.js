@@ -334,7 +334,7 @@ export class mglFilesLoader{
             loader = new GLTFLoader();
 
             const dracoLoader = new DRACOLoader();
-            dracoLoader.setDecoderPath( mglPackage.mglLibPath + 'extern/addons/libs/draco/');
+            dracoLoader.setDecoderPath('extern/addons/libs/draco/');
             loader.setDRACOLoader( dracoLoader );
 
         } else if(ext == 'json'){

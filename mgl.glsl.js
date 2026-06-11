@@ -59,10 +59,9 @@ void main(){
 `;
     }
 
-    getFrag(options){
-        return this.getCommon() + this.getShader(options.id).main;
-    }
-
+    // getFrag(options){
+    //     return this.getCommon() + this.getShader(options.id).main;
+    // }
 
     setShader(shaderData = {}){
         if(!shaderData.id){
@@ -97,7 +96,8 @@ void main(){
         };
 
         const vertexShader = this.getVert();
-        const fragmentShader = this.getFrag(options);
+        const shader = this.getShader(options.id);
+        const fragmentShader = this.getCommon() + shader.main;
 
         // Cache key - based on shader sources
         const cacheKey = vertexShader + '||' + fragmentShader;
@@ -113,12 +113,13 @@ void main(){
                 vertexShader,
                 fragmentShader,
                 transparent: true,
-                side: THREE.DoubleSide
+                side: shader.doubleside ? THREE.DoubleSide : THREE.FrontSide
             });
             this.shaderCache.set(cacheKey, material);
             material = material.clone();
         }
 
+        // Uniforms
         material.uniforms = {
             iTime: { value: 0 },
             iTimeMul: { value: 1 },
@@ -127,6 +128,14 @@ void main(){
             iSize: { value: options.iSize },
             iChannel0: { value: options.iChannel0 },
         };
+
+        // Shader uniforms
+        shader.uniforms?.forEach(key => {
+            if (key in options) {
+                material.uniforms[key] = { value: options[key] };
+            } else
+                material.uniforms[key] = { value: undefined };
+        });
 
         material.update = function(deltaTime){
             material.uniforms.iTime.value += deltaTime;

@@ -114,8 +114,8 @@ export class mglInitSections{
         mglFiles.getScreen().setLoadingText(gamer.lang("LOADING_MESSAGE"));
 
         // Debug
-        if(gamer.gameData.debug)
-            mglBuild.debug = true;
+        if(gamer.gameData.debug != undefined)
+            mglBuild.debug = gamer.gameData.debug;
 
         // Lock the context menu
         if(!mglBuild.debug && !url.searchParams.get("mglmenu")){

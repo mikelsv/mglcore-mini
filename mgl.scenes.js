@@ -15,20 +15,20 @@ export class mglGitems {
     }
 
     getGitemById(id){
-         return this.gitems.find(item => item.id == id);
+        return this.gitems.find(item => item.id == id);
     }
 
     getGitemByType(type){
-         return this.gitems.find(item => item.type == type);
+        return this.gitems.find(item => item.type == type);
     }
 
     getAllGitemByType(type){
-         return this.gitems.filter(item => item.type == type);
+        return this.gitems.filter(item => item.type == type);
     }
 
     disposeGitem(gitem){
         const mesh = gitem.mesh;
-        this.disposeGitem(gitem);
+        //this.disposeGitem(gitem);
 
         if (mesh.geometry) mesh.geometry.dispose();
         if (mesh.material) {
@@ -38,14 +38,16 @@ export class mglGitems {
     }
 
     removeGitem(gitem){
-        scene.remove(gitem.mesh);
-        //console.log('removeGitem', gitem);
-
         const index = this.gitems.indexOf(gitem);
-        if(index > -1)
-            this.gitems.splice(index, 1);
-        else
-            console.error("removeGitem() index fail!");
+
+        if(index < 0){
+            console.error("removeGitem() index fail!", gitem);
+            return ;
+        }
+
+        this.disposeGitem(gitem);
+        scene.remove(gitem.mesh);
+        this.gitems.splice(index, 1);
     }
 
     removeGitemsById(id){
@@ -93,7 +95,10 @@ export class mglGitems {
     }
 
     makeBaseGitem(id){
-        const mesh = new THREE.Mesh(undefined, undefined);
+        const mesh = new THREE.Mesh(
+            new THREE.PlaneGeometry(1, 1),
+            undefined
+        );
 
         const gitem = {
             id: id,
@@ -141,22 +146,37 @@ export class mglGitems {
         return { gitem, mesh };
     }
 
-    updateBaseGitem(gitem, options = {}){
+    updateBaseGitem(gitem, options = {}){ console.log(gitem.mesh.geometry);
+        // geometry
+        // if(!gitem.mesh.geometry){
+        //     gitem.mesh.geometry = new THREE.PlaneGeometry(1, 1);
+        // }
+
+        // Size
         if(options.size){
             gitem.size = options.size;
 
             if(gitem?.mesh?.material?.uniforms?.iSize)
                 gitem.mesh.material.uniforms.iSize.value = options.size;
 
-            gitem.mesh.geometry.dispose?.();
-            gitem.mesh.geometry = new THREE.PlaneGeometry(...gitem.size);
+            if(gitem?.mesh?.material?.uniforms?.iResolution)
+                gitem.mesh.material.uniforms.iResolution.value = options.size;
+
+            gitem.mesh.scale.x = options.size[0];
+            gitem.mesh.scale.y = options.size[1];
+
+            //gitem.mesh.geometry.dispose?.();
+            //gitem.mesh.geometry = new THREE.PlaneGeometry(...gitem.size);
+            //gitem.mesh.geometry = new THREE.PlaneGeometry(...gitem.size);
         }
 
+        // Positions
         if(options.pos){
             gitem.mesh.position.set(options.pos.x, options.pos.y, options.pos.z);
             gitem.position = gitem.mesh.position.clone();
         }
 
+        // Glsl
         if(options.glsl && gitem.mesh.material.type === 'MeshBasicMaterial'){
             gitem.mesh.material.dispose();
 
@@ -171,12 +191,85 @@ export class mglGitems {
         }
     }
 
-    update(deltaTime){
-        //const time = Date.now();
+    makeAutoGitem(options = {}){
+        const glsl = {
+            id: options.id,
+            iSize: options.size ?? [1, 1],
+            ...options.material
+        };
 
-        for(const item of this.gitems){
-            if(item.update)
-                item.update(deltaTime);
+        const material = this.makeMaterial(glsl);
+
+        const mesh = new THREE.Mesh(
+            new THREE.PlaneGeometry(1, 1),
+            material
+        );
+
+        if(options.pos)
+            mesh.position.set(options.pos.x, options.pos.y, options.pos.z);
+
+        if(options.size)
+            mesh.scale.set(options.size.x, options.size.y, 1);
+
+        const gitem = {
+            id: options.id,
+            mesh,
+        };
+
+        mesh.gitem = gitem;
+
+        if(options.gid)
+            gitem.gid = options.gid;
+
+        if(options.clickback){
+            mesh.clickback = options.clickback;
+        }
+
+        if(options.getScreen && !gitem.updateScreen){
+            gitem.updateScreen = () => {
+                const item = options.getScreen();
+
+                if (item.size) {
+                    gitem.size = item.size;
+
+                    if (gitem?.mesh?.material?.uniforms?.iSize)
+                        gitem.mesh.material.uniforms.iSize.value = item.size;
+
+                    if (gitem?.mesh?.material?.uniforms?.iResolution)
+                        gitem.mesh.material.uniforms.iResolution.value = item.size;
+
+                    gitem.mesh.scale.x = item.size.x;
+                    gitem.mesh.scale.y = item.size.y;
+                }
+
+                if (item.pos) {
+                    gitem.mesh.position.set(item.pos.x, item.pos.y, item.pos.z);
+                    gitem.position = gitem.mesh.position.clone();
+                }
+            }
+
+            gitem.updateScreen();
+        }
+
+        if(options.update){
+            gitem.update = () => { options.update(); }
+        } else if(material.update)
+            gitem.update = (deltaTime) => material.update(deltaTime);
+
+        this.addGitem(gitem);
+
+        return gitem;
+    }
+
+    update(deltaTime) {
+        for (let i = this.gitems.length - 1; i >= 0; i--) {
+            const gitem = this.gitems[i];
+
+            if (gitem.update)
+                gitem.update(deltaTime);
+
+            if (gitem.remove)
+                this.removeGitem(gitem);
         }
     }
 
@@ -186,6 +279,76 @@ export class mglGitems {
                 item.updateScreen();
         }
     }
+
+    // Tweaks
+    tweaks = [];
+
+    addTweak(item, _tweak = {}){
+        if(!item.tweaks)
+            item.tweaks = [];
+
+        // Init
+        let tweak = {
+            time : 1000,
+            onStart: undefined,
+            onTime: undefined,
+            onEnd: undefined,
+            ... _tweak
+        };
+
+        // Add
+        item.tweaks.push(tweak);
+
+        // Exsist
+        let ext = this.tweaks.find(obj => obj == item);
+        if(!ext)
+            this.tweaks.push(item);
+    }
+
+    updateTweaks(){
+        for(let i = this.tweaks.length - 1; i >= 0; i --){
+            const item = this.tweaks[i];
+
+            // New
+            if(!item.tweak){
+                if(item.tweaks.length){
+                    const tweak = item.tweaks[0];
+
+                    // New tweak
+                    item.tweak = new mglTweak();
+                    item.tweak.start(tweak.time ? tweak.time : 1000);
+
+                    // Calls
+                    item.tweak.onStart = tweak.onStart;
+                    item.tweak.onTime = tweak.onTime;
+                    item.tweak.onEnd = tweak.onEnd;
+
+                    item.tweak.onStart?.();
+                } else {
+                    this.tweaks.splice(i, 1);
+                    continue;
+                }
+            } else {
+                const tweak = item.tweaks[0];
+                tweak.value = item.tweak.value();
+                item.tweak.onTime?.();
+
+                if(item.tweak.end()){
+                    item.tweak.onEnd?.();
+                    const remove = tweak.remove == true ? tweak.item : undefined;
+
+                    item.tweaks.splice(0, 1);
+                    delete item.tweak;
+
+                    if(remove){
+                        this.tweaks.splice(i, 1);
+                        this.removeGitem(remove);
+                    }
+                }
+            }
+        }
+    }
+
 };
 
 // Scene class
@@ -195,8 +358,6 @@ export class mglScene extends mglGitems {
     }
 
     onStart(){
-
-
     }
 
     makeMaterial(){
@@ -415,11 +576,70 @@ export class mglScenes {
         return point;
     }
 
+    getScreenCornersAtY(y) {
+        // Нормализованные координаты углов экрана (-1..1)
+        const cornersNDC = [
+            new THREE.Vector3(-1, -1, -1), // Левый нижний (near)
+            new THREE.Vector3(1, -1, -1),  // Правый нижний
+            new THREE.Vector3(1, 1, -1),    // Правый верхний
+            new THREE.Vector3(-1, 1, -1),  // Левый верхний
+            new THREE.Vector3(-1, -1, -1), // Левый нижний снова
+        ];
+
+        const raycaster = new THREE.Raycaster();
+        const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -y); // Плоскость y = yValue
+        const worldCorners = [];
+
+        cornersNDC.forEach(ndc => {
+            raycaster.setFromCamera(ndc, camera);
+            const point = new THREE.Vector3();
+            raycaster.ray.intersectPlane(plane, point);
+            worldCorners.push(point);
+        });
+
+        return worldCorners; // [leftBottom, rightBottom, leftTop, rightTop]
+    }
+
+    getScreenPointByCorners(corners, x, y) {
+        // Проверяем, что x и y находятся в диапазоне от 0 до 1
+        //if (x < 0 || x > 1 || y < 0 || y > 1) {
+        //    throw new Error("x и y должны быть в диапазоне от 0 до 1");
+        //}
+
+        // Интерполяция по вертикали между верхними и нижними углами
+        const top = corners[0].clone().lerp(corners[1], x); // верхняя линия
+        const bottom = corners[3].clone().lerp(corners[2], x); // нижняя линия
+
+        // Интерполяция по горизонтали между верхней и нижней линиями
+        const point = top.lerp(bottom, y);
+
+        return point;
+    }
+
     // Test
-    testDuplicateValues(enumObj){
-        const values = Object.values(enumObj);
-        const uniqueValues = new Set(values);
-        return values.length !== uniqueValues.size;
+    // testDuplicateValues(enumObj){
+    //     const values = Object.values(enumObj);
+    //     const uniqueValues = new Set(values);
+    //     return values.length !== uniqueValues.size;
+    // }
+
+    // getDuplicateValues(enumObj){
+    //     const values = Object.values(enumObj);
+    //     return values.filter((item, index) => values.indexOf(item) !== index);
+    // }
+
+    testDuplicateValues(enumObj) {
+        const seen = new Set();
+        const duplicates = new Set();
+
+        for (const value of Object.values(enumObj)) {
+            if (seen.has(value)) {
+                duplicates.add(value);
+            } else {
+                seen.add(value);
+            }
+        }
+        return [...duplicates];
     }
 
 };

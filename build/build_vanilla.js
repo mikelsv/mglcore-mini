@@ -3,6 +3,7 @@ import esbuild from 'esbuild';
 import fs from 'fs';
 import path from 'path';
 import { pathToFileURL } from 'url';
+import posthtml from 'posthtml';
 
 const projectDir = path.resolve(process.argv[2]);
 const outDir = path.resolve(process.argv[3]);
@@ -73,7 +74,7 @@ class mglBundle {
 
         // Replace the data in the file build.js
         this.replaceTextInFile(releaseDir + "/build.js", '"RPC_MGL_PROJECT"', '"' + projectName +'"');
-        this.replaceTextInFile(releaseDir + "/build.js", '"RPC_MGL_BUILD"', `"${projectVer}(${projectDate})` + this.getCurrentDateTime() +'"')
+        this.replaceTextInFile(releaseDir + "/build.js", '"RPC_MGL_BUILD"', `"${projectVer}(${projectDate}) [` + this.getCurrentDateTime() +']"')
 
         // Make clean html
         const buildPath = path.resolve(releaseDir, 'build.js');
@@ -89,15 +90,16 @@ class mglBundle {
             mglReq = await import(pathToFileURL(file).href);
         }
 
+        mglReq.mglPackage.mglMain = gamer.build.main;
         mglReq.mglPackage.mglLibPath = './';
         mglReq.mglPackage.mglExtScripts = mglBuild.getSdkScripts();
         mglReq.mglPackage.mglExtScripts.push(
             { src: 'build.js', local: true }
         );
 
-        mglReq.mglPackage.mglExtScripts.push(
-            { code: '<script>const mglPackage = { mglLibPath: "./" };</script>' }
-        );
+        // mglReq.mglPackage.mglExtScripts.push(
+        //     { code: '<script>const mglPackage = { mglLibPath: "./" };</script>' }
+        // );
 
         fs.writeFile(releaseDir + "/mglcore/mgl.build.js", '', (err) => {});
 
@@ -136,6 +138,55 @@ class mglBundle {
             }
         } catch (e) {
             console.error("Error during minification:", e.message);
+        }
+
+        // Bundle
+        if (gamer.build.bundle) {
+            this.log("Done. Build html... ");
+
+            // Read index.html
+            const html = fs.readFileSync(path.join(releaseDir, 'index.html'), 'utf8');
+            let scriptsToBundle = [];
+
+            const plugin = (tree) => {
+                tree.match({ tag: 'script' }, (node) => {
+                    const attrs = node.attrs || {};
+                    const src = attrs.src;
+                    const isIgnored = 'bundle-ignore' in attrs;
+
+                    // Ignore external links and scripts with the ignore attribute
+                    if (src && !src.startsWith('http') && !isIgnored) {
+                        scriptsToBundle.push(path.join(releaseDir, src));
+                        return null; // Remove the tag from HTML
+                    }
+                    return node;
+                });
+            };
+
+            const { html: newHtml } = await posthtml([plugin]).process(html);
+
+            const combinedCode = scriptsToBundle
+                .map(filePath => {
+                    const content = fs.readFileSync(filePath, 'utf8');
+
+                    if(gamer.build.delete)
+                        fs.unlinkSync(filePath);
+
+                    return content;
+                })
+                .join('\n');
+
+            const result = await esbuild.transform(combinedCode, {
+                minify: gamer.build.minify,
+                sourcemap: false,
+                target: 'es6'
+            });
+
+            fs.writeFileSync(path.join(releaseDir, 'bundle.js'), result.code);
+
+            // Insert the bundle back into the HTML before </body>
+            const finalHtml = newHtml.replace('</body>', '<script src="bundle.js"></script></body>');
+            fs.writeFileSync(path.join(releaseDir, 'index.html'), finalHtml);
         }
 
         // await Promise.all([

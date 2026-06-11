@@ -86,6 +86,11 @@ let gamer = {
         this.saveGameData();
     },
 
+    debugGame(value = true){
+        this.gameData.debug = value;
+        this.saveGameData();
+    },
+
     lang(id){
         let lang = this.langs[id];
 
@@ -150,7 +155,6 @@ let gamer = {
         if (dict[key]?.[id] === undefined){
             console.warn(`mgl_i18n2: Key "${key}" is missing in current language [${gamer.gameData.lang}]`);
         }
-
 
         return params ? gamer.interpolate_i18n(value, params) : value;
     },

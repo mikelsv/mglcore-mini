@@ -48,10 +48,11 @@ var mglPackage = {
             let item = scripts[i];
             let src = !item.local ? `${this.mglLibPath}${item.src}` : item.src;
             let type = !item.type ? '' : " type=" + item.type;
+            const ext = !item.bundle_ignore ? '' : 'bundle-ignore ';
 
             // Insert
             if(item.src)
-                html += `<script src='${src}'${type}></script>\r\n`;
+                html += `<script ${ext}src='${src}'${type}></script>\r\n`;
             if(item.code)
                 html += item.code;
         }

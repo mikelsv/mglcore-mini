@@ -140,7 +140,47 @@ let mglBuild = {
 };
 
 async function mglBuildInit(){
-    mglBuild.log("mglBuild.init() ", mglBuild.build, mglBuild.platform);
+    if (typeof AndroidBridge !== "undefined" && AndroidBridge.getUserId) {
+        // Прямо и синхронно забираем ID из Котлина!
+        mglBuild.playerId = AndroidBridge.getUserId();
+    }
+
+    mglBuild.log("mglBuild.init()", mglBuild.build, mglBuild.platform, mglBuild.playerId);
+    mglWebLog('init');
+}
+
+function mglWebLog(eventName, data){
+    const payload = {
+        project: mglBuild.project,
+        build: mglBuild.build,
+        player_id: mglBuild.playerId,
+        event_name: eventName,
+        data: JSON.stringify(data)
+    };
+
+    fetch('https://seninworld.ru/swgames/weblog.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+    })
+    .then(response => {
+        // Если сервер ответил ошибкой (например, 400 или 500), мы всё равно прочитаем её текст
+        return response.text().then(text => {
+            return { ok: response.ok, status: response.status, text: text };
+        });
+    })
+    .then(res => {
+        if (res.ok) {
+            console.log("WebLog:", res.text);
+        } else {
+            console.error(`WebLog error (Code ${res.status}):`, res.text);
+        }
+    })
+    .catch(error => {
+        console.error('Network error (server unavailable):', error.message);
+    });
 }
 
 // Module

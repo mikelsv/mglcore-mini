@@ -165,27 +165,81 @@ class mglBundle {
 
             const { html: newHtml } = await posthtml([plugin]).process(html);
 
+            // // Создаем временную точку входа для esbuild
+            // const tempEntryPoint = path.join(releaseDir, 'temp_entry_bundle.js');
+            // const importStatements = scriptsToBundle.map(filePath => {
+            //     const relativePath = './' + path.relative(releaseDir, filePath).replace(/\\/g, '/');
+            //     return `import "${relativePath}";`;
+            // }).join('\n');
+
+            // fs.writeFileSync(tempEntryPoint, importStatements);
+
             const combinedCode = scriptsToBundle
                 .map(filePath => {
                     const content = fs.readFileSync(filePath, 'utf8');
 
-                    if(gamer.build.delete)
-                        fs.unlinkSync(filePath);
 
+                    // Удаляем старый файл, если включен флаг delete
+                    if (gamer.build.delete && fs.existsSync(filePath)) {
+                        fs.unlinkSync(filePath);
+                    }
                     return content;
                 })
                 .join('\n');
 
+
             const result = await esbuild.transform(combinedCode, {
                 minify: gamer.build.minify,
                 sourcemap: false,
-                target: 'es6'
+                target: 'es6',
+                format: 'esm'
             });
 
             fs.writeFileSync(path.join(releaseDir, 'bundle.js'), result.code);
 
+            /*
+            // 3. Записываем этот объединенный код во временный файл
+            // Это не даст esbuild применить tree-shaking и вырезать объявление let gamer
+            const tempCombinedFile = path.join(releaseDir, 'temp_combined_bundle.js');
+            fs.writeFileSync(tempCombinedFile, combinedCode);
+
+            const bundleResult = await esbuild.build({
+                entryPoints: [tempCombinedFile],
+                bundle: true,
+                write: false,
+                minify: gamer.build.minify,
+                sourcemap: false,
+                target: gamer.build.target ?? 'es6', //'es2022',
+                // format: 'esm',
+                // platform: 'browser',
+                // loader: {
+                //     '.json': 'json'
+                // },
+                // //external: ['*.json'],
+                // supported: {
+                //     'import-attributes': true
+                // }
+            });*/
+
+            // // Очищаем временный файл точки входа
+            // if (fs.existsSync(tempEntryPoint)) fs.unlinkSync(tempEntryPoint);
+
+            // // Удаляем старые JS-файлы, если включен флаг delete
+            if (gamer.build.delete) {
+                scriptsToBundle.forEach(filePath => {
+                    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+                });
+            }
+
+            // Очищаем временный файл сборки
+            //if (fs.existsSync(tempCombinedFile)) fs.unlinkSync(tempCombinedFile);
+
+            // Записываем готовый bundle.js
+            //const finalCode = bundleResult.outputFiles[0].text;
+            //fs.writeFileSync(path.join(releaseDir, 'bundle.js'), finalCode);
+
             // Insert the bundle back into the HTML before </body>
-            const finalHtml = newHtml.replace('</body>', '<script src="bundle.js"></script></body>');
+            const finalHtml = newHtml.replace('</body>', '<script src="bundle.js" type="module"></script></body>');
             fs.writeFileSync(path.join(releaseDir, 'index.html'), finalHtml);
         }
 

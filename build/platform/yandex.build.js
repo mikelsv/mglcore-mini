@@ -270,7 +270,7 @@ async function mglBuildInit(){
     mglBuild.log("mglBuild.init() ", mglBuild.build, mglBuild.platform);
 
     // Yandex
-    ysdk = await YaGames.init();
+    const ysdk = await YaGames.init();
     mglBuild.ysdk = ysdk;
 
     let jsonEnvir = {

@@ -66,6 +66,7 @@ class mglBundle {
         this.copyFilesSync(projectDir, releaseDir);
 
         // MyGL Core copy
+        fs.mkdirSync(path.join(releaseDir, "mglcore"), { recursive: true });
         fs.copyFileSync(path.join("../", "mgl.core.js"), path.join(releaseDir, "mglcore", "mgl.core.js"));
         fs.copyFileSync(path.join("../", "mgl.package.js"), path.join(releaseDir, "mglcore", "mgl.package.js"));
 

@@ -209,8 +209,6 @@ export class mglApp{
         //     }
         // });
 
-        console.log();
-
         // User call
         this.onLoadApp();
 

@@ -6,9 +6,22 @@ import { pathToFileURL } from 'url';
 //import * as archiver from 'archiver';
 //const archiver = require('archiver');
 
+//import { createRequire } from 'module'; // <--- НОВОЕ
+//const require = createRequire(import.meta.url);
+
 const projectDir = path.resolve(process.argv[2]);
 const outDir = path.resolve(process.argv[3]);
 const buildPlatform = process.argv[4];
+
+
+function loadCommonJS(filePath) {
+    const content = fs.readFileSync(filePath, 'utf8');
+    const dummyModule = { exports: {} };
+    // Изолированно выполняем код, передавая ему искусственные module и exports
+    const fn = new Function('module', 'exports', content);
+    fn(dummyModule, dummyModule.exports);
+    return dummyModule.exports;
+}
 
 // Получаем параметры командной строки
 //const args = process.argv;
@@ -27,7 +40,7 @@ let mglReq;
 let gamer = {};
 
 if (!projectDir || !outDir) {
-  console.error("Usage: node build_vanila.js <from> <to>");
+  console.error("Usage: node build_module.js <from> <to>");
   process.exit(1);
 }
 
@@ -79,14 +92,16 @@ class mglBundle{
         // Copy all files from projectDir to releaseDir
         this.copyFilesSync(projectDir, releaseDir);
 
-        // // 4
-        // // Копирование библиотек в папку проекта
-        // copyFilesSync(projectDir + "/../extern", releaseDir + "/extern");
-        // copyFilesSync(projectDir + "/../mglcore", releaseDir + "/mglcore");
+        // MyGL Core copy
+        this.copyFilesSync(path.join(projectDir, "../extern"), releaseDir + "/extern");
+        this.copyFilesSync(path.join(projectDir, "../mglcore-mini"), releaseDir + "/mglcore");
 
         // MyGL Core copy
-        fs.copyFileSync(path.join("../", "mgl.core.js"), path.join(releaseDir, "mglcore", "mgl.core.js"));
-        fs.copyFileSync(path.join("../", "mgl.package.js"), path.join(releaseDir, "mglcore", "mgl.package.js"));
+        //fs.mkdirSync(path.join(releaseDir, "mglcore"), { recursive: true });
+        //fs.copyFileSync(path.join("../", "mgl.core.js"), path.join(releaseDir, "mglcore", "mgl.core.js"));
+        //fs.copyFileSync(path.join("../", "mgl.package.js"), path.join(releaseDir, "mglcore", "mgl.package.js"));
+        //fs.copyFileSync(path.join("../", "mgl.app.js"), path.join(releaseDir, "mglcore", "mgl.app.js"));
+        //fs.copyFileSync(path.join("../", "mgl.controls.js"), path.join(releaseDir, "mglcore", "mgl.controls.js"));
 
         //Copy the $buildPlatform.build.js file to a new name build.js
         fs.copyFileSync(path.join("platform", buildPlatform + ".build.js"), path.join(releaseDir, "build.js"));
@@ -97,21 +112,30 @@ class mglBundle{
 
         // Make clean html
         const buildPath = path.resolve(releaseDir, 'build.js');
-        const { mglBuild } = await import(pathToFileURL(buildPath).href);
+        const { mglBuild } = loadCommonJS(buildPath);// await import(pathToFileURL(buildPath).href);
 
         if (fs.existsSync("./" + releaseDir + '/package.js')) {
             const file = path.resolve(releaseDir, 'package.js');
-            mglReq = await import(pathToFileURL(file).href);
+            //mglReq = await import(pathToFileURL(file).href);
+            mglReq = loadCommonJS(file);
         } else {
             const file = path.resolve(releaseDir, 'mglcore/mgl.package.js');
-            mglReq = await import(pathToFileURL(file).href);
+            //console.log("F", file);
+            //mglReq = await import(pathToFileURL(file).href);
+            //const imported = await import(pathToFileURL(file).href);
+            //mglReq = imported.default || imported;
+            //console.log('imported', imported);
+            mglReq = loadCommonJS(file);
         }
 
+        //console.log('mglReq', mglReq, mglReq.mglPackage);
 
 // if(fs.existsSync("./" + releaseDir + '/package.js'))
 //     mglReq = require("./" + releaseDir + '/package.js');
 // else
 //     mglReq = require("./" + releaseDir + '/mglcore/mgl.package.js');
+
+//const s = mglBuild.getSdkScripts();
 
 mglReq.mglPackage.mglMain = gamer.build.main;
 mglReq.mglPackage.mglLibPath = './';
@@ -150,10 +174,10 @@ fs.writeFile(releaseDir + "/mglcore/mgl.build.js", '', (err) => {});
 
             // Alias
             alias: {
-                'mglcore': './' + releaseDir + '/mglcore',
-                'three': './' + releaseDir + '/extern/three.module.js',
-                'three/addons': './' + releaseDir + '/extern/addons/',
-                'cannon-es' : './' + releaseDir + '/extern/cannon-es.js',
+                'mglcore': releaseDir + '/mglcore',
+                'three': releaseDir + '/extern/three.module.js',
+                'three/addons': releaseDir + '/extern/addons/',
+                'cannon-es' : releaseDir + '/extern/cannon-es.js',
             },
             format: 'esm',
             pure: ['THREE'], // Помогает esbuild понять, что вызовы THREE не имеют побочных эффектов

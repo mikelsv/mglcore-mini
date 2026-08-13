@@ -60,191 +60,78 @@ var mglBuild = {
     },
 
     // Liderboards
-    async autoLeaderboard(leaderboardName, score, flags){
+        async autoLeaderboard(leaderboardName, score, flags) {
         // Имя ключа в localStorage зависит от названия лидерборда
         const storageKey = gamer.projectName + `local_lb_${leaderboardName}`;
 
-        // 1. Загружаем существующий топ или создаем пустой массив
+        // 1. Загружаем существующие результаты игрока(ов) из памяти
         let localData = JSON.parse(localStorage.getItem(storageKey)) || [];
 
-        // 2. Создаем объект текущего результата
-        // Для гостя ID будет 'guest', чтобы мы могли найти его в списке
-        const currentEntry = {
-            playerId: 'guest_id',
-            name: 'Guest',
-            avatar: '', // Пустая строка для аватара
-            score: Math.floor(score)
-        };
+        // Определяем ID (берем из объекта gamer, если есть, иначе 'guest_id')
+        const currentPlayerId = typeof gamer !== 'undefined' && gamer.playerId ? gamer.playerId : 'guest_id';
 
         if (flags & this.leaderboardFlags.SET) {
-            // 3. Добавляем новый результат
-            localData.push(currentEntry);
+            const currentEntry = {
+                playerId: currentPlayerId,
+                name: 'Guest',
+                avatar: '',
+                score: Math.floor(score)
+            };
 
-            // 4. Сортируем по очкам (от большего к меньшему)
+            // Ищем, есть ли уже этот игрок в сохраненных данных
+            const existingPlayerIndex = localData.findIndex(p => p.playerId === currentPlayerId);
+
+            if (existingPlayerIndex !== -1) {
+                // Обновляем результат, только если он лучше предыдущего (чтобы не забить весь топ собой)
+                if (currentEntry.score > localData[existingPlayerIndex].score) {
+                    localData[existingPlayerIndex] = currentEntry;
+                }
+            } else {
+                localData.push(currentEntry);
+            }
+
+            // Сортируем реальных игроков
             localData.sort((a, b) => b.score - a.score);
-
-            // 5. Оставляем только топ-10 уникальных результатов
-            // (Если хочешь хранить только один лучший результат игрока, можно добавить фильтрацию)
             localData = localData.slice(0, 10);
 
-            // 6. Сохраняем обратно в память браузера
+            // Сохраняем в localStorage ТОЛЬКО реальные данные (без ботов)
             localStorage.setItem(storageKey, JSON.stringify(localData));
         }
 
-        if(!(flags & this.leaderboardFlags.GET))
-            return ;
+        // Если нам не нужно возвращать данные, выходим
+        if (!(flags & this.leaderboardFlags.GET)) {
+            return;
+        }
 
-        // 7. Формируем ответ, идентичный структуре SDK (добавляем ранг)
-        const formattedResult = localData.map((item, index) => ({
-            playerId: item.playerId,
-            rank: index + 1,
-            name: item.name,
-            avatar: item.avatar,
-            score: item.score
-        }));
+        // --- БЛОК ГЕНЕРАЦИИ БОТОВ (каждый раз заново, не сохраняются) ---
 
-        // Имитируем небольшую задержку сети для реалистичности async
-        await new Promise(resolve => setTimeout(resolve, 3000));
-
-        return formattedResult;
-    },
-
-    async setScoreLeaderboard_DEP(leaderboardName, score){
-        // Имя ключа в localStorage зависит от названия лидерборда
-        const storageKey = gamer.projectName + `local_lb_${leaderboardName}`;
-
-        // 1. Загружаем существующий топ или создаем пустой массив
-        let localData = JSON.parse(localStorage.getItem(storageKey)) || [];
-
-        // 2. Создаем объект текущего результата
-        // Для гостя ID будет 'guest', чтобы мы могли найти его в списке
-        const currentEntry = {
-            playerId: 'guest_id',
-            name: 'Guest',
-            avatar: '', // Пустая строка для аватара
-            score: Math.floor(score)
-        };
-
-        // 3. Добавляем новый результат
-        localData.push(currentEntry);
-
-        // 4. Сортируем по очкам (от большего к меньшему)
-        localData.sort((a, b) => b.score - a.score);
-
-        // 5. Оставляем только топ-10 уникальных результатов
-        // (Если хочешь хранить только один лучший результат игрока, можно добавить фильтрацию)
-        localData = localData.slice(0, 10);
-
-        // 6. Сохраняем обратно в память браузера
-        localStorage.setItem(storageKey, JSON.stringify(localData));
-
-        return true;
-    },
-
-    async getScoreLeaderboard_DEP(leaderboardName){
-        // Имя ключа в localStorage зависит от названия лидерборда
-        const storageKey = gamer.projectName + `local_lb_${leaderboardName}`;
-
-        // 1. Загружаем существующий топ или создаем пустой массив
-        let localData = JSON.parse(localStorage.getItem(storageKey)) || [];
-
-        // 7. Формируем ответ, идентичный структуре SDK (добавляем ранг)
-        const formattedResult = localData.map((item, index) => ({
-            playerId: item.playerId,
-            rank: index + 1,
-            name: item.name,
-            avatar: item.avatar,
-            score: item.score
-        }));
-
-        // Имитируем небольшую задержку сети для реалистичности async
-        await new Promise(resolve => setTimeout(resolve, 3000));
-
-        return formattedResult;
-    },
-
-    async getScoreLeaderboardDemo(leaderboardName, currentScore = 0){
-        // 1. Пул имен для случайных ботов
         const botNames = [
             "CyberKnight", "PixelQueen", "MasterMind", "ShadowPlayer",
             "LuckyStar", "TurboRacer", "IndieDev", "GhostBuster",
             "RetroGamer", "FireBall", "IceDragon", "NeonLight"
         ];
 
-        // 2. Генерируем 9 случайных записей (ботов)
-        let players = [];
+        // Копируем реальные данные, чтобы не изменить массив localData
+        let displayData = [...localData];
+
+        // Генерируем 9 случайных записей
         for (let i = 0; i < 9; i++) {
-            players.push({
+            let botScore = Math.floor(score + Math.random() * 5000 - 2500);
+            if (botScore < 0) botScore = 0; // Защита от отрицательных очков
+
+            displayData.push({
                 playerId: 'bot_' + i,
                 name: botNames[i % botNames.length],
-                avatar: '', // Заглушка аватара
-                score: Math.floor(currentScore + Math.random() * 5000 - 2500)
+                avatar: 'https://i.pravatar.cc/150?u=' + botNames[i % botNames.length],
+                score: botScore
             });
         }
 
-        // 3. Добавляем текущего игрока-гостя
-        players.push({
-            playerId: gamer.playerId, // Тот самый ID
-            name: 'Guest',
-            avatar: '',
-            score: currentScore
-        });
+        // Сортируем общий микс (сохраненные результаты игрока + 9 сгенерированных ботов)
+        displayData.sort((a, b) => b.score - a.score);
 
-        // 4. Сортируем всех по убыванию очков
-        players.sort((a, b) => b.score - a.score);
-
-        // 5. Присваиваем ранги и форматируем результат (Топ-10)
-        const result = players.slice(0, 10).map((player, index) => ({
-            playerId: player.playerId,
-            rank: index + 1,
-            name: player.name,
-            avatar: player.avatar,
-            score: player.score
-        }));
-
-        // Имитируем сетевую задержку
-        await new Promise(resolve => setTimeout(resolve, 3000));
-
-        return result;
-    },
-
-    async setgetScoreLeaderboard_DEP(leaderboardName, currentScore = 0){
-        await this.setScoreLeaderboard(leaderboardName, currentScore);
-        return this.getScoreLeaderboard(leaderboardName);
-    },
-
-    // DEPRECATED
-    async resultToLeaderboard_DEPRECATED(leaderboardName, score){
-        // Имя ключа в localStorage зависит от названия лидерборда
-        const storageKey = gamer.projectName + `local_lb_${leaderboardName}`;
-
-        // 1. Загружаем существующий топ или создаем пустой массив
-        let localData = JSON.parse(localStorage.getItem(storageKey)) || [];
-
-        // 2. Создаем объект текущего результата
-        // Для гостя ID будет 'guest', чтобы мы могли найти его в списке
-        const currentEntry = {
-            playerId: 'guest_id',
-            name: 'Guest',
-            avatar: '', // Пустая строка для аватара
-            score: Math.floor(score)
-        };
-
-        // 3. Добавляем новый результат
-        localData.push(currentEntry);
-
-        // 4. Сортируем по очкам (от большего к меньшему)
-        localData.sort((a, b) => b.score - a.score);
-
-        // 5. Оставляем только топ-10 уникальных результатов
-        // (Если хочешь хранить только один лучший результат игрока, можно добавить фильтрацию)
-        localData = localData.slice(0, 10);
-
-        // 6. Сохраняем обратно в память браузера
-        localStorage.setItem(storageKey, JSON.stringify(localData));
-
-        // 7. Формируем ответ, идентичный структуре SDK (добавляем ранг)
-        const formattedResult = localData.map((item, index) => ({
+        // Формируем финальный Топ-10 с рангами для отдачи в игру
+        const formattedResult = displayData.slice(0, 10).map((item, index) => ({
             playerId: item.playerId,
             rank: index + 1,
             name: item.name,
@@ -252,8 +139,8 @@ var mglBuild = {
             score: item.score
         }));
 
-        // Имитируем небольшую задержку сети для реалистичности async
-        await new Promise(resolve => setTimeout(resolve, 300));
+        // Имитируем небольшую задержку сети
+        await new Promise(resolve => setTimeout(resolve, 3000));
 
         return formattedResult;
     },
@@ -268,11 +155,18 @@ var mglBuild = {
     // Auth html message
     getAuthHtml(text = 'Clickt to auth'){
         return `<a href="#" onclick="alert('Booo!'); return false;"><b>${text}</b></a>`;
-    }
+    },
 
+    // Logs
+    log: (...args) => console.log(...args),
+    warn: (...args) => console.warn(...args),
+    error: (...args) => console.error(...args)
 };
 
 async function mglBuildInit(){
+    if(gamer?.projectVers)
+        mglBuild.build = gamer.projectVers[0][1];
+
     mglBuild.log("mglBuild.init() ", mglBuild.build, mglBuild.platform);
     mglBuild.playerId = 'guest_id';
 }

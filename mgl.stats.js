@@ -274,7 +274,7 @@ export class mglStats{
         this.dom.addEventListener("contextmenu", event => {
             this.switchMinimal(!this._minimal);
             event.preventDefault();
-        }, !1);
+        }, 0);
 
         this.switchMinimal(0);
         this.switchOrientation(0);
@@ -349,28 +349,63 @@ export class mglStats{
 
     // GPU
     beginQuery(){
-        this.gpuPanel && (this.query = this.gl.createQuery(), this.gl.beginQuery(this.ext.TIME_ELAPSED_EXT, this.query));
+        if (!this.gpuPanel) return;
+
+        this.query = this.gl.createQuery();
+
+        if (this.query)
+            this.gl.beginQuery(this.ext.TIME_ELAPSED_EXT, this.query);
     }
 
     endQuery(){
-        this.gpuPanel && (this.gl.endQuery(this.ext.TIME_ELAPSED_EXT), this.queries.push(this.query), this.query = null);
+        if (!this.gpuPanel) return;
+
+        if (this.query) {
+            this.gl.endQuery(this.ext.TIME_ELAPSED_EXT);
+            this.queries.push(this.query);
+            this.query = null;
+        }
     }
 
     // Quires
     getQueriesTime(){
-        const e = this.gl,
-            t = this.ext;
-        let n = 0;
+        const gl = this.gl;
+        const ext = this.ext;
+        let totalTime = 0;
+
+        const isDisjoint = gl.getParameter(ext.GPU_DISJOINT_EXT);
+
         for (let i = this.queries.length - 1; i >= 0; i--) {
-            const r = this.queries[i],
-                a = e.getQueryParameter(r, e.QUERY_RESULT_AVAILABLE),
-                o = e.getParameter(t.GPU_DISJOINT_EXT);
-            if (a && !o) {
-                const l = e.getQueryParameter(r, e.QUERY_RESULT) * 1e-6;
-                n += l, e.deleteQuery(r), this.queries.splice(i, 1)
+            const query = this.queries[i];
+
+            if (!query) {
+                this.queries.splice(i, 1);
+                continue;
+            }
+
+            const isAvailable = gl.getQueryParameter(query, gl.QUERY_RESULT_AVAILABLE);
+
+            if (isAvailable) {
+                if (!isDisjoint) {
+                    const timeElapsed = gl.getQueryParameter(query, gl.QUERY_RESULT) * 1e-6;
+                    totalTime += timeElapsed;
+                }
+
+                gl.deleteQuery(query);
+                this.queries.splice(i, 1);
             }
         }
-        return n;
+
+        if (isDisjoint) {
+            for (const query of this.queries) {
+                if (query) {
+                    gl.deleteQuery(query);
+                }
+            }
+            this.queries.length = 0;
+        }
+
+        return totalTime;
     }
 
     // Update

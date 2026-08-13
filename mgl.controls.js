@@ -392,6 +392,12 @@ export class mglKeyboardControl{
         });
     }
 
+    addKeyListener(key){
+        if (this.keys[key] === undefined) {
+            this.keys[key] = 0;
+        }
+    }
+
     getMove(){
         const keys = this.keys;
 
@@ -399,6 +405,10 @@ export class mglKeyboardControl{
             -keys['ArrowLeft'] - keys['KeyA'] + keys['ArrowRight'] + keys['KeyD'],
             -keys['ArrowUp'] - keys['KeyW'] + keys['ArrowDown'] + keys['KeyS']
         );
+    }
+
+    getKeyState(key){
+        return this.keys[key];
     }
 }
 

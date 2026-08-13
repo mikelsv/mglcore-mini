@@ -233,10 +233,10 @@ export class mglGitems {
                     gitem.size = item.size;
 
                     if (gitem?.mesh?.material?.uniforms?.iSize)
-                        gitem.mesh.material.uniforms.iSize.value = item.size;
+                        gitem.mesh.material.uniforms.iSize.value = [item.size.x, item.size.y];
 
                     if (gitem?.mesh?.material?.uniforms?.iResolution)
-                        gitem.mesh.material.uniforms.iResolution.value = item.size;
+                        gitem.mesh.material.uniforms.iResolution.value = [item.size.x, item.size.y];
 
                     gitem.mesh.scale.x = item.size.x;
                     gitem.mesh.scale.y = item.size.y;
@@ -628,7 +628,7 @@ export class mglScenes {
     //     return values.filter((item, index) => values.indexOf(item) !== index);
     // }
 
-    testDuplicateValues(enumObj) {
+    testDuplicateValues(enumObj, showAlert){
         const seen = new Set();
         const duplicates = new Set();
 
@@ -639,6 +639,10 @@ export class mglScenes {
                 seen.add(value);
             }
         }
+
+        if(!!showAlert && duplicates.size > 0)
+            console.error(showAlert, duplicates);
+
         return [...duplicates];
     }
 

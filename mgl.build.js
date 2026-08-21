@@ -60,7 +60,7 @@ var mglBuild = {
     },
 
     // Liderboards
-        async autoLeaderboard(leaderboardName, score, flags) {
+    async autoLeaderboard(leaderboardName, score, flags) {
         // Имя ключа в localStorage зависит от названия лидерборда
         const storageKey = gamer.projectName + `local_lb_${leaderboardName}`;
 
@@ -146,7 +146,10 @@ var mglBuild = {
     },
 
     // Language
-    updateLang(){},
+    updateLang(){
+        if(!gamer.gameData.lang)
+            gamer.gameData.lang = 'en';
+    },
 
     isLocalLang(){
         return true;

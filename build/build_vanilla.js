@@ -1,69 +1,27 @@
-import AdmZip from 'adm-zip';
 import esbuild from 'esbuild';
 import fs from 'fs';
 import path from 'path';
 import { pathToFileURL } from 'url';
 import posthtml from 'posthtml';
 
-const projectDir = path.resolve(process.argv[2]);
-const outDir = path.resolve(process.argv[3]);
-const buildPlatform = process.argv[4];
-
-let projectName = null;
-let projectVer = null;
-let projectDate;
-let releaseDir;
-let gamer = {};
+import { mglBundleBase,
+    projectDir, outDir, buildPlatform,
+    //projectName, projectVer, projectDate, releaseDir, gamer
+ } from './build_base.js';
 
 //console.log("Build", projectDir, '-', outDir, '-', buildPlatform);
 
-if (!projectDir || !outDir) {
-  console.error("Usage: node build_vanila.js <from> <to>");
-  process.exit(1);
-}
 
-class mglBundle {
+
+class mglBundle extends mglBundleBase {
     totalFiles = 0;
     totalSize = 0;
 
     async makeBuild(){
-        // Read gamer
-        const gamerData = fs.readFileSync(path.join(projectDir, 'gamer.js'), 'utf8');
-        eval(gamerData);
+        this.initBuild();
 
-        projectName = gamer.projectName;
-        projectVer = gamer.projectVers[0][0];
-        projectDate = gamer.projectVers[0][1];
-
-        console.log("### Build for", projectName, " - ", projectVer, " - ", buildPlatform);
-
-        // Make release folder: $buildName/ver
-        releaseDir = path.join(outDir, projectName, projectVer)
-        fs.mkdirSync(releaseDir, { recursive: true });
-
-        // Ignore mask
-        if(gamer.build?.ignoreFiles){
-            const masks = gamer.build.ignoreFiles.split(',').map(s => s.trim());
-
-            // const regexSource = gamer.build.ignoreFiles
-            //     .replace(/\./g, '\\.')
-            //     .replace(/\*/g, '.*');
-
-            // this.ignoreMask = new RegExp(`^${regexSource}$`, 'i');
-
-            // 2. Превращаем каждую маску в валидный Regex-паттерн
-            const patterns = masks.map(m => {
-                return m
-                    .replace(/[.+^${}()|[\]\\]/g, '\\$&') // Экранируем всё, что может сломать RegExp
-                    .replace(/\*/g, '.*');               // Звездочку превращаем в "любые символы"
-            });
-
-            // 3. Собираем в один RegExp через | (ИЛИ)
-            this.ignoreMask = new RegExp(`^(${patterns.join('|')})$`, 'i');
-        }
-
-        // Copy all files from projectDir to releaseDir
-        this.copyFilesSync(projectDir, releaseDir);
+        const releaseDir = this.releaseDir;
+        const gamer = this.gamer;
 
         // MyGL Core copy
         fs.mkdirSync(path.join(releaseDir, "mglcore"), { recursive: true });
@@ -74,211 +32,197 @@ class mglBundle {
         fs.copyFileSync(path.join("platform", buildPlatform + ".build.js"), path.join(releaseDir, "build.js"));
 
         // Replace the data in the file build.js
-        this.replaceTextInFile(releaseDir + "/build.js", '"RPC_MGL_PROJECT"', '"' + projectName +'"');
-        this.replaceTextInFile(releaseDir + "/build.js", '"RPC_MGL_BUILD"', `"${projectVer}(${projectDate}) [` + this.getCurrentDateTime() +']"')
+        this.replaceTextInFile(releaseDir + "/build.js", '"RPC_MGL_PROJECT"', '"' + this.projectName +'"');
+        this.replaceTextInFile(releaseDir + "/build.js", '"RPC_MGL_BUILD"', `"${this.projectVer}(${this.projectDate}) [` + this.getCurrentDateTime() +']"')
 
         // Make clean html
         const buildPath = path.resolve(releaseDir, 'build.js');
-        const { mglBuild } = await import(pathToFileURL(buildPath).href);
+        const { mglBuild } = this.loadCommonJS(buildPath);// await import(pathToFileURL(buildPath).href);
         let mglReq;
         //let mglBuild = require("./" + releaseDir + '/build.js').mglBuild;
 
         if(fs.existsSync("./" + releaseDir + '/package.js')){
             const file = path.resolve(releaseDir, 'package.js');
-            mglReq = await import(pathToFileURL(file).href);
+            //mglReq = await import(pathToFileURL(file).href);
+            mglReq = this.loadCommonJS(file);
         } else {
             const file = path.resolve(releaseDir, 'mglcore/mgl.package.js');
-            mglReq = await import(pathToFileURL(file).href);
+            //mglReq = await import(pathToFileURL(file).href);
+            mglReq = this.loadCommonJS(file);
         }
 
         mglReq.mglPackage.mglMain = gamer.build.main;
         mglReq.mglPackage.mglLibPath = './';
         mglReq.mglPackage.mglExtScripts = mglBuild.getSdkScripts();
         mglReq.mglPackage.mglExtScripts.push(
-            { src: 'build.js', local: true }
+            { src: 'build.js', local: true, bundle_raw: true }
         );
 
         // mglReq.mglPackage.mglExtScripts.push(
         //     { code: '<script>const mglPackage = { mglLibPath: "./" };</script>' }
         // );
 
-        fs.writeFile(releaseDir + "/mglcore/mgl.build.js", '', (err) => {});
+        fs.writeFileSync(releaseDir + "/mglcore/mgl.build.js", '', (err) => {});
 
         // Write clean html
         this.replacemglImportText(releaseDir + "/index.html", mglReq.mglPackage.makeCleanHtml());
 
-        // Build
-        const files = this.getAllFiles(releaseDir);
-        const jsFiles = files.filter(f => f.endsWith('.js'));
-        const cssFiles = files.filter(f => f.endsWith('.css'));
+        // Build. Minify css
+        if (gamer.build.minify) {
+            this.log("Minify... ");
 
-        this.log("Make bundle... ");
+            const files = this.getAllFiles(releaseDir);
+            const jsFiles = files.filter(f => f.endsWith('.js'));
+            const cssFiles = files.filter(f => f.endsWith('.css'));
 
-        // esbuild options common to JS and CSS
-        const buildOptions = {
-            minify: gamer.build.minify,
-            allowOverwrite: true,
-            outdir: releaseDir, // Write the result back to the release folder
-            outbase: releaseDir, // Preserve the subfolder hierarchy
-            logLevel: 'error' // Output only errors
-        };
+            // esbuild options common to JS and CSS
+            const buildOptions = {
+                minify: gamer.build.minify,
+                allowOverwrite: true,
+                outdir: releaseDir, // Write the result back to the release folder
+                outbase: releaseDir, // Preserve the subfolder hierarchy
+                logLevel: 'error' // Output only errors
+            };
 
-        try {
-            if (jsFiles.length > 0) {
-                await esbuild.build({
-                    ...buildOptions,
-                    entryPoints: jsFiles
-                });
+            try {
+                if (jsFiles.length > 0) {
+                    await esbuild.build({
+                        ...buildOptions,
+                        entryPoints: jsFiles
+                    });
+                }
+
+                if (cssFiles.length > 0) {
+                    await esbuild.build({
+                        ...buildOptions,
+                        entryPoints: cssFiles
+                    });
+                }
+            } catch (e) {
+                console.error("Error during minification:", e.message);
             }
-
-            if (cssFiles.length > 0) {
-                await esbuild.build({
-                    ...buildOptions,
-                    entryPoints: cssFiles
-                });
-            }
-        } catch (e) {
-            console.error("Error during minification:", e.message);
         }
 
         // Bundle
         if (gamer.build.bundle) {
-            this.log("Done. Build html... ");
+            this.log("Done. Build bundle... ");
 
             // Read index.html
             const html = fs.readFileSync(path.join(releaseDir, 'index.html'), 'utf8');
-            let scriptsToBundle = [];
+            let scriptsToBundle = [], combinedRawCode = '';
 
             const plugin = (tree) => {
                 tree.match({ tag: 'script' }, (node) => {
                     const attrs = node.attrs || {};
                     const src = attrs.src;
                     const isIgnored = 'bundle-ignore' in attrs;
+                    const isRaw = 'bundle-raw' in attrs;
 
                     // Ignore external links and scripts with the ignore attribute
-                    if (src && !src.startsWith('http') && !isIgnored) {
+                    if (src && !src.startsWith('http') && !isIgnored && !isRaw) {
+                        if(gamer.build.log == 'full')
+                            console.log(`Bundle: ${src}`);
+
                         scriptsToBundle.push(path.join(releaseDir, src));
                         return null; // Remove the tag from HTML
                     }
+
+                    if(isRaw){
+                        const filePath = path.join(releaseDir, src);
+                        combinedRawCode += fs.readFileSync(filePath, 'utf8');
+
+                        if (gamer.build.delete){
+                            fs.unlinkSync(filePath);
+
+                            if(gamer.build.log == 'full')
+                                console.log(`Delete bundle-raw: ${filePath}`);
+                        }
+
+                        return null;
+                    }
+
                     return node;
                 });
             };
 
             const { html: newHtml } = await posthtml([plugin]).process(html);
 
-            // // Создаем временную точку входа для esbuild
-            // const tempEntryPoint = path.join(releaseDir, 'temp_entry_bundle.js');
-            // const importStatements = scriptsToBundle.map(filePath => {
-            //     const relativePath = './' + path.relative(releaseDir, filePath).replace(/\\/g, '/');
-            //     return `import "${relativePath}";`;
-            // }).join('\n');
-
-            // fs.writeFileSync(tempEntryPoint, importStatements);
-
+            // Combined code
             const combinedCode = scriptsToBundle
                 .map(filePath => {
                     const content = fs.readFileSync(filePath, 'utf8');
 
-
                     // Удаляем старый файл, если включен флаг delete
                     if (gamer.build.delete && fs.existsSync(filePath)) {
+                        if(gamer.build.log == 'full')
+                            console.log(`Delete: ${filePath}`);
                         fs.unlinkSync(filePath);
                     }
                     return content;
                 })
                 .join('\n');
 
-
-            const result = await esbuild.transform(combinedCode, {
+            // Run eshuild
+            const result = await esbuild.build({
+                stdin: {
+                    contents: combinedCode,
+                    resolveDir: path.resolve(releaseDir),
+                    loader: 'js'
+                },
+                bundle: true,
+                write: false,   // Don't save to disk, return to memory
                 minify: gamer.build.minify,
                 sourcemap: false,
                 target: 'es6',
-                format: 'esm'
+                format: 'esm',
+                metafile: true  // Combines a map of all nested files
             });
 
-            fs.writeFileSync(path.join(releaseDir, 'bundle.js'), result.code);
+            // Final code
+            const finalCode = combinedRawCode + result.outputFiles[0].text;
+            fs.writeFileSync(path.join(releaseDir, 'bundle.js'), finalCode);
 
-            /*
-            // 3. Записываем этот объединенный код во временный файл
-            // Это не даст esbuild применить tree-shaking и вырезать объявление let gamer
-            const tempCombinedFile = path.join(releaseDir, 'temp_combined_bundle.js');
-            fs.writeFileSync(tempCombinedFile, combinedCode);
+            // Delete
+            const importedFiles = Object.keys(result.metafile.inputs);
 
-            const bundleResult = await esbuild.build({
-                entryPoints: [tempCombinedFile],
-                bundle: true,
-                write: false,
-                minify: gamer.build.minify,
-                sourcemap: false,
-                target: gamer.build.target ?? 'es6', //'es2022',
-                // format: 'esm',
-                // platform: 'browser',
-                // loader: {
-                //     '.json': 'json'
-                // },
-                // //external: ['*.json'],
-                // supported: {
-                //     'import-attributes': true
-                // }
-            });*/
+            if (gamer.build.delete)
+                for (const relativePath of importedFiles) {
+                    // Skip virtual stdin
+                    if (relativePath === '<stdin>') continue;
 
-            // // Очищаем временный файл точки входа
-            // if (fs.existsSync(tempEntryPoint)) fs.unlinkSync(tempEntryPoint);
+                    // Skip node_modules (if any)
+                    if (relativePath.includes('node_modules')) continue;
 
-            // // Удаляем старые JS-файлы, если включен флаг delete
-            if (gamer.build.delete) {
-                scriptsToBundle.forEach(filePath => {
-                    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-                });
-            }
+                    const fullPath = path.resolve(relativePath);
+                    try {
+                        fs.unlinkSync(fullPath);
 
-            // Очищаем временный файл сборки
-            //if (fs.existsSync(tempCombinedFile)) fs.unlinkSync(tempCombinedFile);
-
-            // Записываем готовый bundle.js
-            //const finalCode = bundleResult.outputFiles[0].text;
-            //fs.writeFileSync(path.join(releaseDir, 'bundle.js'), finalCode);
+                        if(gamer.build.log == 'full')
+                            console.log(`Removed the nested import: ${relativePath}`);
+                    } catch (e) {
+                        console.error("Error: ", e);
+                    }
+                }
 
             // Insert the bundle back into the HTML before </body>
-            const finalHtml = newHtml.replace('</body>', '<script src="bundle.js" type="module"></script></body>');
+            const regex = /<div mgl_package="">([\s\S]*?)<\/div>/;
+            let match = newHtml.match(regex);
+            let finalHtml = 'FAIL!!!';
+
+            if(match)
+                finalHtml = match[1].replace(/^\s*[\r\n]/gm, '') + '  <script src="bundle.js" type="module"></script>';
+            else
+                console.error("Fail match!");
+
+            finalHtml = newHtml.replace(/<div mgl_package="">([\s\S]*?)<\/div>/g, '<div mgl_package="">\r\n' + finalHtml + '\r\n</div>');
+
+            // const finalHtml = newHtml
+            // .replace(/^\s*[\r\n]/gm, '')
+            // .replace('</body>', '<script src="bundle.js" type="module"></script></body>');
             fs.writeFileSync(path.join(releaseDir, 'index.html'), finalHtml);
         }
 
-        // await Promise.all([
-        //     ...jsFiles.map(file => esbuild.build({
-        //     entryPoints: [file],
-        //     minify: true,
-        //     allowOverwrite: true,
-        //     outfile: file,
-        //     })),
-
-        //     ...cssFiles.map(file => esbuild.build({
-        //     entryPoints: [file],
-        //     minify: true,
-        //     allowOverwrite: true,
-        //     outfile: file,
-        //     }))
-        // ]);
-
-        this.log("Done. Achiving... ");
-
-        //this.makeArchive(releaseDir, 'release/' + projectName + '/' + projectName + '_' + projectVer + '_' + buildPlatform + '.zip');
-        const zip = new AdmZip();
-        zip.addLocalFolder(releaseDir);
-
-        const zipPath = path.join(outDir, projectName, `${projectName}_${projectVer}_${buildPlatform}.zip`);
-        zip.writeZip(zipPath);
-
-        const zipStats = fs.statSync(zipPath);
-
-        this.log("Build finished!");
-        this.log('\r\n');
-
-        console.log("-------------------------------------------------------");
-        console.log(`[Files] Copied: ${this.totalFiles} pcs.`);
-        console.log(`[Size] Initial weight: ${this.formatBytes(this.totalSize)}`);
-        console.log(`[ZIP] Archive size: ${this.formatBytes(zipStats.size)}`);
-        console.log("-------------------------------------------------------");
+        this.makeZip();
     }
 
     // Helper for searching all files in a folder
@@ -293,116 +237,6 @@ class mglBundle {
         }
     });
     return arrayOfFiles;
-    }
-
-    copyFilesSync(sourceDir, targetDir) {
-        // Check if the source directory exists
-        if (!fs.existsSync(sourceDir)) {
-            console.error(`Исходная директория не существует: ${sourceDir}`);
-            return;
-        }
-
-        // Create the target directory if it doesn't exist
-        if (!fs.existsSync(targetDir)) {
-            fs.mkdirSync(targetDir, { recursive: true });
-        }
-
-        // Read the contents of the source directory
-        const items = fs.readdirSync(sourceDir);
-
-        items.forEach(item => {
-            const sourcePath = path.join(sourceDir, item);
-            const targetPath = path.join(targetDir, item);
-
-            // Apply a mask to ignore files
-            if(this.ignoreMask && this.ignoreMask.test(item)){
-                //console.log("ignore", item);
-                return ;
-            }
-
-            // Check if the element is a directory
-            if (fs.statSync(sourcePath).isDirectory()) {
-                if(item == '.git' || item == '.vscode')
-                    return ;
-
-                //if(item != "tmp" && item != "temp")
-                if (!/^(tmp|temp)/.test(item))
-                    // Recursively copy nested directories
-                    this.copyFilesSync(sourcePath, targetPath);
-            } else {
-                const stats = fs.statSync(sourcePath);
-                this.totalFiles++;
-                this.totalSize += stats.size;
-
-                fs.copyFileSync(sourcePath, targetPath);
-            }
-        });
-    }
-
-    replaceTextInFile(filePath, searchValue, replaceValue) {
-        // Check if the file exists
-        if (!fs.existsSync(filePath)) {
-            console.error(`File does not exist: ${filePath}`);
-            return;
-        }
-
-        // Read the file contents
-        const fileContent = fs.readFileSync(filePath, 'utf8');
-
-        // Replace the text
-        const updatedContent = fileContent.replace(searchValue, replaceValue);
-
-        // Write the updated contents back to the file
-        fs.writeFileSync(filePath, updatedContent, 'utf8');
-    }
-
-    replacemglImportText(filePath, text) {
-        // Read file contents
-        fs.readFile(filePath, 'utf8', (err, data) => {
-            if (err) {
-                console.error('Error reading file:', err);
-                return;
-            }
-
-            // Regular expression for searching for the <script mgl_import>...</script> block
-            const regex = /<div mgl_package>[\s\S]*?<\/div>/g;
-
-            // Replace the found block with new text
-            const result = data.replace(regex, text);
-
-            // Write the changed contents back to the file
-            fs.writeFile(filePath, result, 'utf8', (err) => {
-                if (err) {
-                    console.error('Error writing file:', err);
-                    return;
-                }
-            });
-        });
-    }
-
-    getCurrentDateTime() {
-        const now = new Date();
-
-        const year = now.getFullYear();
-        const month = String(now.getMonth() + 1).padStart(2, '0'); // Months start with 0
-        const day = String(now.getDate()).padStart(2, '0');
-        const hours = String(now.getHours()).padStart(2, '0');
-        const minutes = String(now.getMinutes()).padStart(2, '0');
-        const seconds = String(now.getSeconds()).padStart(2, '0');
-
-        return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
-    }
-
-    formatBytes(bytes) {
-        if (bytes === 0) return '0 Bytes';
-        const k = 1024;
-        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-    }
-
-    log(text) {
-        process.stdout.write(String(text));
     }
 };
 

@@ -259,7 +259,10 @@ var mglBuild = {
     },
 
     // Language
-    updateLang(){},
+    updateLang(){
+        if(!gamer.gameData.lang)
+            gamer.gameData.lang = 'en';
+    },
 
     isLocalLang(){
         return true;

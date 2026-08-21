@@ -349,6 +349,32 @@ export class mglGitems {
         }
     }
 
+    // Dispose
+    disposeMesh(object) {
+        object.traverse((child) => {
+            if (child.geometry)
+                child.geometry.dispose();
+
+            if (child.material) {
+                if (Array.isArray(child.material)) {
+                    child.material.forEach((material) => this.disposeMaterial(material));
+                } else {
+                    this.disposeMaterial(child.material);
+                }
+            }
+        });
+    }
+
+    disposeMaterial(material) {
+        for (const key in material) {
+            if (material[key] && material[key].isTexture) {
+                material[key].dispose();
+            }
+        }
+
+        material.dispose();
+    }
+
 };
 
 // Scene class

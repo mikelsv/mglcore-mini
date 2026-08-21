@@ -20,9 +20,9 @@ let mglBuild = {
         GET: 1,
         SET: 2,
         GETSET: 3,
-        REPLACE: 4,
-        SETREP: 6,
-        GETSETREP: 7
+        SETUP: 4,
+        //SETREP: 6,
+        //GETSETREP: 7
     },
 
     init(){
@@ -87,7 +87,7 @@ let mglBuild = {
 
         // Проверяем: включена ли реклама и прошло ли время
         if (config.enable && (currentTime - config.lastTime >= config.interval)) {
-            await ysdk.adv.showFullscreenAdv({
+            await this.ysdk.adv.showFullscreenAdv({
                 callbacks: {
                     onOpen: () => {
                         // Ставим игру на паузу и выключаем звук
@@ -129,22 +129,20 @@ let mglBuild = {
                 return;
             }
 
-            // Current score
-            let currentScore = 0;
+            // Set score
+            if ((flags & this.leaderboardFlags.SET)) {
+                let currentScore = 0;
 
-            // Get last value
-            if ((flags & this.leaderboardFlags.SET) && !(flags & this.leaderboardFlags.REPLACE)) {
-            try {
-                const res = await this.ysdk.leaderboards.getPlayerEntry(leaderboardName);
-                currentScore = res.score;
-            } catch (e) {
-                console.log('mglBuild.autoLeaderboard(). The player is not yet featured on the leaderboard.');
-            }
+                if(flags & this.leaderboardFlags.SETUP){
+                    const res = await this.ysdk.leaderboards.getPlayerEntry(leaderboardName);
+                    currentScore = res.score;
+                }
 
-            // If the new score is higher, update (whole numbers only)
-            if((flags & this.leaderboardFlags.SET) && newScore > currentScore)
-                await this.ysdk.leaderboards.setScore(leaderboardName, Math.floor(newScore));
-                console.log('mglBuild.autoLeaderboard(). Account updated successfully!');
+                if((newScore > currentScore)){
+                    await this.ysdk.leaderboards.setScore(leaderboardName, Math.floor(newScore));
+                    console.log('mglBuild.autoLeaderboard(). Account updated successfully!');
+                } else
+                    console.log('mglBuild.autoLeaderboard(). Last score, ', currentScore, ' < ', newScore, '. No update.');
             }
 
             // No GET -> exit

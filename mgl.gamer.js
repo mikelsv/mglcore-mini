@@ -23,6 +23,22 @@ let gamer = {
         ["0.0", "00.00.0000 00:00", "Not created yet."],
     ],
 
+    build: {
+        main: 'app.js',
+        minify: true,
+        bundle: true,
+        delete: true,
+        ignoreFiles: '*_orig.*, .temp, *.md, *.bat, .gitignore'
+    },
+
+    advertise: {
+        interstitial: {
+            enable: true,
+            interval: 120,
+            lastTime: 0
+        }
+    },
+
     base: {
         // Base values
         lang: 'en',

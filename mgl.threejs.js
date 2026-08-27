@@ -501,6 +501,30 @@ export class mglAudioLoader{
             console.error("mglAudioLoader.playSound(): " + name + ' not exist.');
     }
 
+    playPositionSound(name, mesh){
+        const audio = this.getAudio(name);
+        if(audio){
+            const sound = new THREE.PositionalAudio(this.audioListener);
+            sound.setBuffer(audio.buffer);
+            sound.setVolume(1);
+
+            // 2. Настраиваем радиус слышимости (опционально)
+            sound.setRefDistance(5);  // Расстояние, на котором звук максимальный
+            sound.setMaxDistance(50); // Расстояние, после которого звук вообще не слышно
+
+            mesh.add(sound);
+
+            sound.play();
+
+            sound.source.onended = () => {
+                mesh.remove(sound);
+                sound.disconnect();
+            };
+        }
+        else
+            console.error("mglAudioLoader.playSound(): " + name + ' not exist.');
+    }
+
     pause(name, tweak){
         const audio = this.getAudio(name);
         if(audio){

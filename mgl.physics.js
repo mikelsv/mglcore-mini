@@ -1,15 +1,17 @@
 import * as THREE from 'three';
 
 export class mglPhysicsEngine {
-    constructor(camera, playerHeight = 2.0) {
+    constructor(camera, options = {}) {
         this.camera = camera;
-        this.playerHeight = playerHeight;
+        this.playerHeight = 2;
         this.playerRadius = 0.3;
+        this.callbacks = options.callbacks;
 
         this.stepHeight = 0.9;
 
         this.boxes = [];
         this.circles = [];
+        this.spheres = [];
 
         this.velocityY = 0;
         this.gravity = -20;
@@ -56,6 +58,11 @@ export class mglPhysicsEngine {
         return this.circles.at(-1);
     }
 
+    addSphere(x, y, z, radius) {
+        this.spheres.push({ x, y, z, radius });
+        return this.spheres.at(-1);
+    }
+
     _intersectsCircleXZ(box, circle) {
         const closestX = Math.max(box.min.x, Math.min(circle.x, box.max.x));
         const closestZ = Math.max(box.min.z, Math.min(circle.z, box.max.z));
@@ -79,6 +86,18 @@ export class mglPhysicsEngine {
         for (let circle of this.circles) {
             if (circle.y > y + this.stepHeight && circle.bottomY < y + this.playerHeight) {
                 if (this._intersectsCircleXZ(playerBox, circle)) return true;
+            }
+        }
+
+        for (let s of this.spheres) {
+            // Находим ближайшую точку хитбокса игрока к центру сферы
+            const cx = Math.max(x - this.playerRadius, Math.min(s.x, x + this.playerRadius));
+            const cy = Math.max(y + this.stepHeight, Math.min(s.y, y + this.playerHeight));
+            const cz = Math.max(z - this.playerRadius, Math.min(s.z, z + this.playerRadius));
+
+            const distSq = (s.x - cx) ** 2 + (s.y - cy) ** 2 + (s.z - cz) ** 2;
+            if (distSq <= s.radius * s.radius) {
+                return true;
             }
         }
 
@@ -107,6 +126,22 @@ export class mglPhysicsEngine {
             }
         }
 
+        for (let s of this.spheres) {
+            const dx = x - s.x;
+            const dz = z - s.z;
+            const distSqXZ = dx * dx + dz * dz;
+
+            // Если игрок находится в пределах горизонтальной проекции сферы
+            if (distSqXZ <= s.radius * s.radius) {
+                // Вычисляем высоту верхней точки сферы под ногами игрока
+                const surfaceY = s.y + Math.sqrt(s.radius * s.radius - distSqXZ);
+
+                if (surfaceY <= y + this.stepHeight && surfaceY >= y - 1.0) {
+                    maxFloorY = Math.max(maxFloorY, surfaceY);
+                }
+            }
+        }
+
         return maxFloorY;
     }
 
@@ -115,13 +150,18 @@ export class mglPhysicsEngine {
         let py = this.camera.position.y - this.playerHeight;
         let pz = this.camera.position.z;
 
+        // 1. Проверяем, застрял ли игрок в объекте прямо сейчас
+        const isStuck = this.checkCollision(px, py, pz);
+
         if (!this.checkCollision(px + moveX, py, pz)) px += moveX;
         if (!this.checkCollision(px, py, pz + moveZ)) pz += moveZ;
 
         this.velocityY += this.gravity * deltaTime;
         let nextY = py + this.velocityY * deltaTime;
 
-        if (this.velocityY > 0 && this.checkCollision(px, nextY, pz)) {
+        // Блокируем движение вверх в потолок ТОЛЬКО если мы не застряли.
+        // Если мы уже внутри объекта — даем беспрепятственно лететь вверх, чтобы выпрыгнуть.
+        if (this.velocityY > 0 && !isStuck && this.checkCollision(px, nextY, pz)) {
             this.velocityY = 0;
             nextY = py;
         }
@@ -151,9 +191,11 @@ export class mglPhysicsEngine {
 
         this.isGrounded = onGround;
 
-        if (jumpPressed && this.isGrounded) {
+        // Разрешаем прыжок, если игрок на земле ИЛИ если он застрял внутри объекта
+        if (jumpPressed && (this.isGrounded || isStuck)) {
             this.velocityY = this.jumpForce;
             this.isGrounded = false;
+            this.callbacks?.onJump();
         }
 
         this.camera.position.set(px, nextY + this.playerHeight, pz);

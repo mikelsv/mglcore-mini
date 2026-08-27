@@ -26,14 +26,17 @@ var mglPackage = {
     initImportMapLocal() {
         this.importMap = {
             "imports": {
-                "mglcore/": `${this.mglLibPath}mglcore-mini/`,
-                "three": "https://threejs.org/build/three.module.js",
-                "three/addons/": "https://threejs.org/examples/jsm/",
+                "mglcore/": `./mglcore/`,
+                //"mglcore/": `${this.mglLibPath}mglcore-mini/`,
+                //"three": "https://unpkg.com/three@0.185.0/build/three.module.min.js",
+                "three": "https://unpkg.com/three@0.185.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.185.0/examples/jsm/",
                 //"three": `${this.mglLibPath}extern/three.module.js`,
                 //"three/addons/": `${this.mglLibPath}extern/addons/`,
                 "lil-gui": `${this.mglLibPath}extern/lil-gui.esm.js`,
                 "cannon-es": `${this.mglLibPath}extern/cannon-es.js`,
                 "matter-js": `${this.mglLibPath}extern/matter.min.js`,
+                "twgl": "https://cdnjs.cloudflare.com/ajax/libs/twgl.js/7.0.0/twgl-full.module.min.js"
             }
         };
     },

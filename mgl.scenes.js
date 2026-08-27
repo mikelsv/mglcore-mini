@@ -423,6 +423,10 @@ export class mglScenes {
         this.scenesList[id] = sceneClass;
     }
 
+    isActive(id){
+        return this.scenesActive.find(item => item.sceneId == id);
+    }
+
     gotoScene(id, options = {}){
         const sceneClass = this.scenesList[id];
         if(!sceneClass)
@@ -572,6 +576,10 @@ export class mglScenes {
 
     // User call
     onStartApp(){}
+    userOnPointDown(event){}
+    userOnPointMove(event){}
+    userOnPointClick(event){}
+    userOnPointUp(event){}
 
     // Callbacks
     callback(data){ console.log('callback', data); } // general
@@ -600,6 +608,47 @@ export class mglScenes {
         raycaster.ray.intersectPlane(plane, point);
 
         return point;
+    }
+
+    getCameraCornersAtDistance(camera, distance = 1.0) {
+        let width, height;
+
+        if (camera.isPerspectiveCamera) {
+            // Угол обзора по вертикали в радианах
+            const vFov = THREE.MathUtils.degToRad(camera.fov);
+            // Полная высота экрана на расстоянии distance
+            height = 2 * Math.tan(vFov / 2) * distance;
+            // Полная ширина с учетом пропорций экрана
+            width = height * camera.aspect;
+        } else {
+            // Для OrthographicCamera (если вдруг переключитесь)
+            height = (camera.top - camera.bottom) / camera.zoom;
+            width = (camera.right - camera.left) / camera.zoom;
+        }
+
+        const halfW = width / 2;
+        const halfH = height / 2;
+
+        // Точки в локальной системе координат камеры (-Z — направление взгляда)
+        const localPoints = {
+            topLeft: new THREE.Vector3(-halfW, halfH, -distance),
+            topRight: new THREE.Vector3(halfW, halfH, -distance),
+            bottomRight: new THREE.Vector3(halfW, -halfH, -distance),
+            bottomLeft: new THREE.Vector3(-halfW, -halfH, -distance)
+        };
+
+        // Обновляем мировую матрицу камеры
+        camera.updateMatrixWorld();
+
+        // Переводим локальные точки камеры в реальные мировые координаты сцены
+        return {
+            topLeft: localPoints.topLeft.applyMatrix4(camera.matrixWorld),
+            topRight: localPoints.topRight.applyMatrix4(camera.matrixWorld),
+            bottomRight: localPoints.bottomRight.applyMatrix4(camera.matrixWorld),
+            bottomLeft: localPoints.bottomLeft.applyMatrix4(camera.matrixWorld),
+            width,
+            height
+        };
     }
 
     getScreenCornersAtY(y) {

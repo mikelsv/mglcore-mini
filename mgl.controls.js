@@ -407,6 +407,10 @@ export class mglKeyboardControl{
         );
     }
 
+    getKeyboardMove(){
+        return this.getMove();
+    }
+
     getKeyState(key){
         return this.keys[key];
     }

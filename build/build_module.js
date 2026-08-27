@@ -13,16 +13,6 @@ const projectDir = path.resolve(process.argv[2]);
 const outDir = path.resolve(process.argv[3]);
 const buildPlatform = process.argv[4];
 
-
-function loadCommonJS(filePath) {
-    const content = fs.readFileSync(filePath, 'utf8');
-    const dummyModule = { exports: {} };
-    // Изолированно выполняем код, передавая ему искусственные module и exports
-    const fn = new Function('module', 'exports', content);
-    fn(dummyModule, dummyModule.exports);
-    return dummyModule.exports;
-}
-
 // Получаем параметры командной строки
 //const args = process.argv;
 
@@ -44,7 +34,7 @@ if (!projectDir || !outDir) {
   process.exit(1);
 }
 
-class mglBundle{
+class mglBundle {
     totalFiles = 0;
     totalSize = 0;
 
@@ -210,23 +200,7 @@ fs.writeFile(releaseDir + "/mglcore/mgl.build.js", '', (err) => {});
         // 10 - Inject to html
         replacemglImportText(releaseDir + "/index.html", mglReq.mglPackage.makeCleanHtml());
 
-        // 10 - Archiving the project
-        //zipDirectory(releaseDir, 'release/' + projectName + '/' + projectName + '_' + projectVer + '_' + buildPlatform + '.zip');
-        const zip = new AdmZip();
-        zip.addLocalFolder(releaseDir);
-        const zipPath = path.join(outDir, projectName, `${projectName}_${projectVer}_${buildPlatform}.zip`);
-        zip.writeZip(zipPath);
-
-        const zipStats = fs.statSync(zipPath);
-
-        console.log("Build finished!");
-        console.log('\r\n');
-
-        console.log("-------------------------------------------------------");
-        console.log(`[Files] Copied: ${this.totalFiles} pcs.`);
-        console.log(`[Size] Initial weight: ${this.formatBytes(this.totalSize)}`);
-        console.log(`[ZIP] Archive size: ${this.formatBytes(zipStats.size)}`);
-        console.log("-------------------------------------------------------");
+        this.makeZip();
     }
 
     copyFilesSync(sourceDir, targetDir) {
@@ -369,7 +343,6 @@ function replacemglImportText(filePath, text){
         });
     });
 }
-
 
 function getCurrentDateTime() {
     const now = new Date();

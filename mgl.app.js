@@ -134,6 +134,7 @@ export class mglApp{
 
     constructor(){
         this.mglFiles = new mglFilesLoader();
+        this.animateApp = this.animateApp.bind(this);
     }
 
     // Files
@@ -257,7 +258,7 @@ export class mglApp{
 
     // [Animate section]
     animateApp(time){
-         this.animationId = requestAnimationFrame(this.animateApp.bind(this));
+         this.animationId = requestAnimationFrame(this.animateApp);
 
         // Stats
         if(mglBuild.debug)

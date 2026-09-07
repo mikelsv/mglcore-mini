@@ -500,8 +500,6 @@ export class mglScenes {
     }
 
     // Mouse
-    mouse = [];
-
     mglOnTouchStart(event){
         if(this.touchId === null){
             const touch = event.touches[0];

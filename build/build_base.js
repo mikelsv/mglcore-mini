@@ -17,6 +17,9 @@ export class mglBundleBase {
         this.projectVer = null;
         this.projectDate = null;
         this.releaseDir = null;
+
+        this.totalFiles = 0;
+        this.totalSize = 0;
     }
 
     initBuild(){

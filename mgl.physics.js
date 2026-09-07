@@ -189,6 +189,9 @@ export class mglPhysicsEngine {
             }
         }
 
+        if(!this.isGrounded && onGround)
+            this.callbacks?.onGround();
+
         this.isGrounded = onGround;
 
         // Разрешаем прыжок, если игрок на земле ИЛИ если он застрял внутри объекта

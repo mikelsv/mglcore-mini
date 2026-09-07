@@ -429,6 +429,9 @@ export class mglAudioLoader{
 
     audioListener;
 
+    soundVolume = .5;
+    musicVolume = .5;
+
     load(camera, mglFilesLoader){
         // Make audio listener
         const listener = new THREE.AudioListener();
@@ -457,6 +460,14 @@ export class mglAudioLoader{
 
     getAudio(name){
         return this.audio.find(item => item.name === name);
+    }
+
+    setSoundVolume(val){
+        this.soundVolume = val;
+    }
+
+    setMusicVolume(val){
+        this.musicVolume = val;
     }
 
     play(name, tweak){
@@ -490,7 +501,7 @@ export class mglAudioLoader{
         if(audio){
             const sound = new THREE.Audio(this.audioListener);
             sound.setBuffer(audio.buffer);
-            sound.setVolume(1);
+            sound.setVolume(this.soundVolume);
             sound.play();
 
             sound.source.onended = () => {
@@ -506,9 +517,9 @@ export class mglAudioLoader{
         if(audio){
             const sound = new THREE.PositionalAudio(this.audioListener);
             sound.setBuffer(audio.buffer);
-            sound.setVolume(1);
+            sound.setVolume(this.soundVolume);
 
-            // 2. Настраиваем радиус слышимости (опционально)
+            // Настраиваем радиус слышимости (опционально)
             sound.setRefDistance(5);  // Расстояние, на котором звук максимальный
             sound.setMaxDistance(50); // Расстояние, после которого звук вообще не слышно
 
@@ -611,7 +622,7 @@ export class mglAudioLoader{
                     if(this.audio[i].tweak.reverse)
                         value = 1 - value;
 
-                    this.audio[i].sound.setVolume(value);
+                    this.audio[i].sound.setVolume(value * this.soundVolume);
 
                     if(this.audio[i].tweak.end()){
                         switch(this.audio[i].tweak.psp){

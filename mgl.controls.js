@@ -403,7 +403,7 @@ export class mglKeyboardControl{
 
         return new KiVec2(
             -keys['ArrowLeft'] - keys['KeyA'] + keys['ArrowRight'] + keys['KeyD'],
-            -keys['ArrowUp'] - keys['KeyW'] + keys['ArrowDown'] + keys['KeyS']
+            - keys['ArrowDown'] - keys['KeyS'] + keys['ArrowUp'] + keys['KeyW']
         );
     }
 

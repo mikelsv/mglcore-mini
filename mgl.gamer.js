@@ -67,6 +67,20 @@ let gamer = {
         }
     },
 
+    // Local data
+    getLocalValue(key, defaultValue){
+        const data = window.localStorage.getItem(this.projectName + key);
+        if(data)
+            return data;
+
+        return defaultValue;
+    },
+
+    setLocalValue(key, val){
+        window.localStorage.setItem(this.projectName + key, val);
+    },
+
+    // Global data
     loadGameData(){
         const savedData = mglBuild.loadPlayerData(this.projectName + 'gameData');
         this.gameData.new();

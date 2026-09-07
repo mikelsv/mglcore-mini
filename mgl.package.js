@@ -3,10 +3,10 @@ var mglPackage = {
     mglLibPath: '../',
     mglExtScripts: [],
     mglScripts:[
-        {src: "mglcore/mgl.core.js"},
+        {src: "mglcore/mgl.core.js", bundle_raw: true},
         {src: "mglcore/mgl.build.js"},
-        {src: "mglcore/mgl.gamer.js", bundle_raw: true},
-        {src: "gamer.js", local: true },
+        {src: "mglcore/mgl.gamer.js", bundle_raw: true },
+        {src: "gamer.js", local: true, bundle_raw: true },
     ],
     mglLocalMap: false,
 

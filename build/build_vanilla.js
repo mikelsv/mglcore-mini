@@ -1,4 +1,5 @@
 import esbuild from 'esbuild';
+//import { minifyTemplates } from 'esbuild-minify-templates';
 import fs from 'fs';
 import path from 'path';
 import { pathToFileURL } from 'url';
@@ -8,15 +9,11 @@ import { mglBundleBase,
     projectDir, outDir, buildPlatform,
     //projectName, projectVer, projectDate, releaseDir, gamer
  } from './build_base.js';
+//import { mglPackage } from '../mgl.package.js';
 
 //console.log("Build", projectDir, '-', outDir, '-', buildPlatform);
 
-
-
 class mglBundle extends mglBundleBase {
-    totalFiles = 0;
-    totalSize = 0;
-
     async makeBuild(){
         this.initBuild();
 
@@ -27,6 +24,11 @@ class mglBundle extends mglBundleBase {
         fs.mkdirSync(path.join(releaseDir, "mglcore"), { recursive: true });
         fs.copyFileSync(path.join("../", "mgl.core.js"), path.join(releaseDir, "mglcore", "mgl.core.js"));
         fs.copyFileSync(path.join("../", "mgl.package.js"), path.join(releaseDir, "mglcore", "mgl.package.js"));
+        fs.copyFileSync(path.join("../", "mgl.gamer.js"), path.join(releaseDir, "mglcore", "mgl.gamer.js"));
+
+        // Full mglcore
+        //this.copyFilesSync(path.join(projectDir, "../mglcore-mini"), releaseDir + "/mglcore");
+        //this.copyFilesSync(path.join(projectDir, "../extern"), releaseDir + "/extern");
 
         //Copy the $buildPlatform.build.js file to a new name build.js
         fs.copyFileSync(path.join("platform", buildPlatform + ".build.js"), path.join(releaseDir, "build.js"));
@@ -57,6 +59,10 @@ class mglBundle extends mglBundleBase {
         mglReq.mglPackage.mglExtScripts.push(
             { src: 'build.js', local: true, bundle_raw: true }
         );
+
+        // Gamer scripts
+        if(gamer.build.scripts)
+            mglReq.mglPackage.mglExtScripts.push(... gamer.build.scripts);
 
         // mglReq.mglPackage.mglExtScripts.push(
         //     { code: '<script>const mglPackage = { mglLibPath: "./" };</script>' }
@@ -118,6 +124,11 @@ class mglBundle extends mglBundleBase {
                     const isIgnored = 'bundle-ignore' in attrs;
                     const isRaw = 'bundle-raw' in attrs;
 
+                    if(!src)
+                        return ;
+
+                    //console.log(`index.html scipts: ${src}`, node);
+
                     // Ignore external links and scripts with the ignore attribute
                     if (src && !src.startsWith('http') && !isIgnored && !isRaw) {
                         if(gamer.build.log == 'full')
@@ -148,27 +159,40 @@ class mglBundle extends mglBundleBase {
             const { html: newHtml } = await posthtml([plugin]).process(html);
 
             // Combined code
-            const combinedCode = scriptsToBundle
+            let combinedCode = scriptsToBundle
                 .map(filePath => {
                     const content = fs.readFileSync(filePath, 'utf8');
 
-                    // Удаляем старый файл, если включен флаг delete
-                    if (gamer.build.delete && fs.existsSync(filePath)) {
-                        if(gamer.build.log == 'full')
-                            console.log(`Delete: ${filePath}`);
-                        fs.unlinkSync(filePath);
-                    }
+                    // // Удаляем старый файл, если включен флаг delete
+                    // if (gamer.build.delete && fs.existsSync(filePath)) {
+                    //     if(gamer.build.log == 'full')
+                    //         console.log(`Delete: ${filePath}`);
+                    //     fs.unlinkSync(filePath);
+                    // }
+
+                    //return `import * from '${filePath}';`;
                     return content;
                 })
                 .join('\n');
 
+            //combinedCode = `import `;
+
             // Run eshuild
             const result = await esbuild.build({
                 stdin: {
-                    contents: combinedCode,
+                    contents: `import './` + gamer.build.main + `';`,
+                    //contents: `import './app.js';`,
                     resolveDir: path.resolve(releaseDir),
                     loader: 'js'
                 },
+                alias: {
+                    //'mglcore': releaseDir + '/mglcore',
+                    'mglcore': '../../mglcore-mini',
+                    'three': '../../extern/three.module.js',
+                    'three/addons': '../../extern/addons',
+                    'cannon-es': releaseDir + '/extern/cannon-es.js',
+                },
+                //plugins: [minifyTemplates()],
                 bundle: true,
                 write: false,   // Don't save to disk, return to memory
                 minify: gamer.build.minify,
@@ -193,14 +217,18 @@ class mglBundle extends mglBundleBase {
                     // Skip node_modules (if any)
                     if (relativePath.includes('node_modules')) continue;
 
-                    const fullPath = path.resolve(relativePath);
-                    try {
-                        fs.unlinkSync(fullPath);
+                        const fullPath = path.resolve(relativePath);
+                        const releasePath = path.resolve(releaseDir);
 
-                        if(gamer.build.log == 'full')
-                            console.log(`Removed the nested import: ${relativePath}`);
-                    } catch (e) {
-                        console.error("Error: ", e);
+                        if (fullPath.startsWith(releasePath + path.sep)) {
+                        try {
+                            fs.unlinkSync(fullPath);
+
+                            if(gamer.build.log == 'full')
+                                console.log(`Removed the nested import: ${relativePath}`);
+                        } catch (e) {
+                            console.error("Error: ", e);
+                        }
                     }
                 }
 
@@ -227,16 +255,16 @@ class mglBundle extends mglBundleBase {
 
     // Helper for searching all files in a folder
     getAllFiles(dirPath, arrayOfFiles) {
-    const files = fs.readdirSync(dirPath);
-    arrayOfFiles = arrayOfFiles || [];
-    files.forEach(file => {
-        if (fs.statSync(dirPath + "/" + file).isDirectory()) {
-        arrayOfFiles = this.getAllFiles(dirPath + "/" + file, arrayOfFiles);
-        } else {
-        arrayOfFiles.push(path.join(dirPath, "/", file));
-        }
-    });
-    return arrayOfFiles;
+        const files = fs.readdirSync(dirPath);
+        arrayOfFiles = arrayOfFiles || [];
+        files.forEach(file => {
+            if (fs.statSync(dirPath + "/" + file).isDirectory()) {
+                arrayOfFiles = this.getAllFiles(dirPath + "/" + file, arrayOfFiles);
+            } else {
+                arrayOfFiles.push(path.join(dirPath, "/", file));
+            }
+        });
+        return arrayOfFiles;
     }
 };
 

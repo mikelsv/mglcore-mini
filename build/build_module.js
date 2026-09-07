@@ -9,9 +9,14 @@ import { pathToFileURL } from 'url';
 //import { createRequire } from 'module'; // <--- НОВОЕ
 //const require = createRequire(import.meta.url);
 
-const projectDir = path.resolve(process.argv[2]);
-const outDir = path.resolve(process.argv[3]);
-const buildPlatform = process.argv[4];
+import { mglBundleBase,
+    projectDir, outDir, buildPlatform,
+    //projectName, projectVer, projectDate, releaseDir, gamer
+ } from './build_base.js';
+
+// const projectDir = path.resolve(process.argv[2]);
+// const outDir = path.resolve(process.argv[3]);
+// const buildPlatform = process.argv[4];
 
 // Получаем параметры командной строки
 //const args = process.argv;
@@ -19,68 +24,68 @@ const buildPlatform = process.argv[4];
 // Input
 //const projectDir = args[2]; // Укажите путь к каталогу проекта
 //const buildPlatform = args[3]; // Укажите платформу, например, 'windows', 'linux' и т.д.
-let buildType = undefined; //args[4];
+// let buildType = undefined; //args[4];
 
-// Build
-let projectName = null;
-let projectVer = null;
-let projectDate;
-let releaseDir;
-let mglReq;
-let gamer = {};
+// // Build
+// let projectName = null;
+// let projectVer = null;
+// let projectDate;
+// let releaseDir;
+// let mglReq;
+// let gamer = {};
 
-if (!projectDir || !outDir) {
-  console.error("Usage: node build_module.js <from> <to>");
-  process.exit(1);
-}
+// if (!projectDir || !outDir) {
+//   console.error("Usage: node build_module.js <from> <to>");
+//   process.exit(1);
+// }
 
-class mglBundle {
-    totalFiles = 0;
-    totalSize = 0;
-
-    constructor(/*projectDir, buildPlatform, buildType*/){
-        if(!buildType)
-            buildType = "bundle-mini"; // -mini
-    }
+class mglBundle extends mglBundleBase  {
+    //constructor(){}
 
     async makeBuild(){
-        // Read gamer
-        const gamerData = fs.readFileSync(path.join(projectDir, 'gamer.js'), 'utf8');
-        eval(gamerData);
+        this.initBuild();
 
-        projectName = gamer.projectName;
-        projectVer = gamer.projectVers[0][0];
-        projectDate = gamer.projectVers[0][1];
+        const releaseDir = this.releaseDir;
+        const gamer = this.gamer;
 
-        console.log("### Build for", projectName, " - ", projectVer, " - ", buildPlatform);
 
-        // Make release folder: $buildName/ver
-        releaseDir = path.join(outDir, projectName, projectVer)
-        fs.mkdirSync(releaseDir, { recursive: true });
+        // // Read gamer
+        // const gamerData = fs.readFileSync(path.join(projectDir, 'gamer.js'), 'utf8');
+        // eval(gamerData);
 
-        // Ignore mask
-        if(gamer.build?.ignoreFiles){
-            const masks = gamer.build.ignoreFiles.split(',').map(s => s.trim());
+        // projectName = gamer.projectName;
+        // projectVer = gamer.projectVers[0][0];
+        // projectDate = gamer.projectVers[0][1];
 
-            // const regexSource = gamer.build.ignoreFiles
-            //     .replace(/\./g, '\\.')
-            //     .replace(/\*/g, '.*');
+        // console.log("### Build for", projectName, " - ", projectVer, " - ", buildPlatform);
 
-            // this.ignoreMask = new RegExp(`^${regexSource}$`, 'i');
+        // // Make release folder: $buildName/ver
+        // releaseDir = path.join(outDir, projectName, projectVer)
+        // fs.mkdirSync(releaseDir, { recursive: true });
 
-            // 2. Превращаем каждую маску в валидный Regex-паттерн
-            const patterns = masks.map(m => {
-                return m
-                    .replace(/[.+^${}()|[\]\\]/g, '\\$&') // Экранируем всё, что может сломать RegExp
-                    .replace(/\*/g, '.*');               // Звездочку превращаем в "любые символы"
-            });
+        // // Ignore mask
+        // if(gamer.build?.ignoreFiles){
+        //     const masks = gamer.build.ignoreFiles.split(',').map(s => s.trim());
 
-            // 3. Собираем в один RegExp через | (ИЛИ)
-            this.ignoreMask = new RegExp(`^(${patterns.join('|')})$`, 'i');
-        }
+        //     // const regexSource = gamer.build.ignoreFiles
+        //     //     .replace(/\./g, '\\.')
+        //     //     .replace(/\*/g, '.*');
 
-        // Copy all files from projectDir to releaseDir
-        this.copyFilesSync(projectDir, releaseDir);
+        //     // this.ignoreMask = new RegExp(`^${regexSource}$`, 'i');
+
+        //     // 2. Превращаем каждую маску в валидный Regex-паттерн
+        //     const patterns = masks.map(m => {
+        //         return m
+        //             .replace(/[.+^${}()|[\]\\]/g, '\\$&') // Экранируем всё, что может сломать RegExp
+        //             .replace(/\*/g, '.*');               // Звездочку превращаем в "любые символы"
+        //     });
+
+        //     // 3. Собираем в один RegExp через | (ИЛИ)
+        //     this.ignoreMask = new RegExp(`^(${patterns.join('|')})$`, 'i');
+        // }
+
+        // // Copy all files from projectDir to releaseDir
+        // this.copyFilesSync(projectDir, releaseDir);
 
         // MyGL Core copy
         this.copyFilesSync(path.join(projectDir, "../extern"), releaseDir + "/extern");
@@ -97,8 +102,8 @@ class mglBundle {
         fs.copyFileSync(path.join("platform", buildPlatform + ".build.js"), path.join(releaseDir, "build.js"));
 
         // Replace the data in the file build.js
-        this.replaceTextInFile(releaseDir + "/build.js", '"RPC_MGL_PROJECT"', '"' + projectName +'"');
-        this.replaceTextInFile(releaseDir + "/build.js", '"RPC_MGL_BUILD"', `"${projectVer}(${projectDate}) [` + this.getCurrentDateTime() +']"')
+        this.replaceTextInFile(releaseDir + "/build.js", '"RPC_MGL_PROJECT"', '"' + this.projectName +'"');
+        this.replaceTextInFile(releaseDir + "/build.js", '"RPC_MGL_BUILD"', `"${this.projectVer}(${this.projectDate}) [` + this.getCurrentDateTime() +']"')
 
         // Make clean html
         const buildPath = path.resolve(releaseDir, 'build.js');

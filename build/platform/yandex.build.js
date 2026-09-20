@@ -261,7 +261,12 @@ let mglBuild = {
         return [
             { src: '/sdk.js', bundle_ignore: true, local: true}
         ];
-    }
+    },
+
+    // Logs
+    log: (...args) => console.log(...args),
+    warn: (...args) => console.warn(...args),
+    error: (...args) => console.error(...args)
 };
 
 async function mglBuildInit(){

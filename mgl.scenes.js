@@ -397,6 +397,24 @@ export class mglScene extends mglGitems {
 
 // Scenes Builder
 export class mglScenes {
+    constructor(){
+        // Touchpad
+        if('ontouchstart' in window){
+            this.touchId = null;
+            this.touchOn = true;
+            window.addEventListener('touchstart', this.mglOnTouchStart.bind(this), { passive: false });
+            window.addEventListener('touchmove', this.mglOnTouchMove.bind(this), { passive: false });
+            window.addEventListener('touchend', this.mglOnTouchEnd.bind(this), { passive: false });
+            window.addEventListener('click', this.mglOnPointClick.bind(this), { passive: false });
+        } else {
+            this.touchOn = false;
+            window.addEventListener('pointerdown', this.mglOnPointDown.bind(this), false);
+            window.addEventListener('pointermove', this.mglOnPointMove.bind(this), false);
+            window.addEventListener('pointerup', this.mglOnPointUp.bind(this), false);
+            window.addEventListener('click', this.mglOnPointClick.bind(this), { passive: false });
+        }
+    }
+
     // Preload
     preloadFiles = [];
     preloadFile(id, file){

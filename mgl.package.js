@@ -19,6 +19,7 @@ var mglPackage = {
                 "lil-gui": `${this.mglLibPath}extern/lil-gui.esm.js`,
                 "cannon-es": `${this.mglLibPath}extern/cannon-es.js`,
                 "matter-js": `${this.mglLibPath}extern/matter.min.js`,
+                "twgl": `${this.mglLibPath}extern/twgl-full.module.min.js`
             }
         };
     },

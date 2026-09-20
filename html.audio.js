@@ -75,7 +75,10 @@ class AudioManager {
     // Play
     playSound(name) {
         const buffer = this.soundsBuffers[name];
-        if (!buffer) return;
+        if (!buffer){
+            console.log("AudioManager. Sound not found: ", name);
+            return;
+        }
 
         const source = this.ctx.createBufferSource();
         source.buffer = buffer;
@@ -85,7 +88,10 @@ class AudioManager {
 
     playSoundSingle(name, restart = false) {
         const buffer = this.soundsBuffers[name];
-        if (!buffer) return;
+        if (!buffer){
+            console.log("AudioManager. Sound not found: ", name);
+            return;
+        }
 
         if (this.activeSounds[name]) {
             if (!restart)

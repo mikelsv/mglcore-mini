@@ -402,7 +402,7 @@ export class mglKeyboardControl{
         const keys = this.keys;
 
         return new KiVec2(
-            -keys['ArrowLeft'] - keys['KeyA'] + keys['ArrowRight'] + keys['KeyD'],
+            - keys['ArrowLeft'] - keys['KeyA'] + keys['ArrowRight'] + keys['KeyD'],
             - keys['ArrowDown'] - keys['KeyS'] + keys['ArrowUp'] + keys['KeyW']
         );
     }

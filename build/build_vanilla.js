@@ -4,6 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { pathToFileURL } from 'url';
 import posthtml from 'posthtml';
+import { execSync } from 'child_process';
 
 import { mglBundleBase,
     projectDir, outDir, buildPlatform,
@@ -64,6 +65,11 @@ class mglBundle extends mglBundleBase {
         if(gamer.build.scripts)
             mglReq.mglPackage.mglExtScripts.push(... gamer.build.scripts);
 
+        if(gamer.build.yandex_debugcheck){
+            this.saveUrlToFileSync('https://raw.githubusercontent.com/Nioris/yandex-games-debug-checker/refs/heads/main/debugcheck.js', path.join(this.releaseDir, 'debugcheck.js'));
+            mglReq.mglPackage.mglExtScripts.push({ src: 'debugcheck.js', local: true, bundle_ignore: true });
+        }
+
         // mglReq.mglPackage.mglExtScripts.push(
         //     { code: '<script>const mglPackage = { mglLibPath: "./" };</script>' }
         // );
@@ -91,12 +97,12 @@ class mglBundle extends mglBundleBase {
             };
 
             try {
-                if (jsFiles.length > 0) {
-                    await esbuild.build({
-                        ...buildOptions,
-                        entryPoints: jsFiles
-                    });
-                }
+                // if (jsFiles.length > 0) {
+                //     await esbuild.build({
+                //         ...buildOptions,
+                //         entryPoints: jsFiles
+                //     });
+                // }
 
                 if (cssFiles.length > 0) {
                     await esbuild.build({
@@ -115,7 +121,9 @@ class mglBundle extends mglBundleBase {
 
             // Read index.html
             const html = fs.readFileSync(path.join(releaseDir, 'index.html'), 'utf8');
-            let scriptsToBundle = [], combinedRawCode = '';
+            let scriptsToBundle = [];
+            let combinedRawCode = '';
+            const rawScripts = [];
 
             const plugin = (tree) => {
                 tree.match({ tag: 'script' }, (node) => {
@@ -139,16 +147,7 @@ class mglBundle extends mglBundleBase {
                     }
 
                     if(isRaw){
-                        const filePath = path.join(releaseDir, src);
-                        combinedRawCode += fs.readFileSync(filePath, 'utf8');
-
-                        if (gamer.build.delete){
-                            fs.unlinkSync(filePath);
-
-                            if(gamer.build.log == 'full')
-                                console.log(`Delete bundle-raw: ${filePath}`);
-                        }
-
+                        rawScripts.push(path.join(releaseDir, src));
                         return null;
                     }
 
@@ -157,6 +156,19 @@ class mglBundle extends mglBundleBase {
             };
 
             const { html: newHtml } = await posthtml([plugin]).process(html);
+
+            // Read, minify, delete
+            for (const filePath of rawScripts) {
+                const code = this.readLocalFile(filePath);
+                combinedRawCode += gamer.build.minify ? await this.minifyCode(code) : code;
+
+                if (gamer.build.delete && this.isRealLocalFile(filePath)) {
+                    fs.unlinkSync(filePath);
+
+                    if (gamer.build.log == 'full')
+                        console.log(`Delete bundle-raw: ${filePath}`);
+                }
+            }
 
             // Combined code
             let combinedCode = scriptsToBundle
@@ -177,6 +189,24 @@ class mglBundle extends mglBundleBase {
 
             //combinedCode = `import `;
 
+            // Glsl Plugin
+            const glslPlugin = {
+                name: 'glsl-minify-plugin',
+                setup: (build) => {
+                    build.onLoad({ filter: /\.(js|ts|mjs)$/ }, async (args) => {
+                        if (args.path.includes('node_modules')) return;
+
+                        const content = await fs.promises.readFile(args.path, 'utf8');
+                        if (!content.includes('/* glsl */')) return;
+
+                        return {
+                            contents: this.minifyGlslInSource(content),
+                            loader: args.path.endsWith('.ts') ? 'ts' : 'js'
+                        };
+                    });
+                }
+            };
+
             // Run eshuild
             const result = await esbuild.build({
                 stdin: {
@@ -191,8 +221,9 @@ class mglBundle extends mglBundleBase {
                     'three': '../../extern/three.module.js',
                     'three/addons': '../../extern/addons',
                     'cannon-es': releaseDir + '/extern/cannon-es.js',
+                    'twgl': '../../extern/twgl-full.module.min.js',
                 },
-                //plugins: [minifyTemplates()],
+                plugins: [glslPlugin],
                 bundle: true,
                 write: false,   // Don't save to disk, return to memory
                 minify: gamer.build.minify,
@@ -266,6 +297,114 @@ class mglBundle extends mglBundleBase {
         });
         return arrayOfFiles;
     }
+
+    readLocalFile(filePath) {
+        let modifiedPath = filePath.replace(this.releaseDir, '');
+
+        if (/([/\\])mglcore([/\\])/i.test(modifiedPath)) {
+            modifiedPath = modifiedPath.replace(/([/\\])mglcore([/\\])/i, '$1mglcore-mini$2');
+            modifiedPath = path.join('../../..', modifiedPath);
+        }
+
+        const finalPath = path.join(this.releaseDir, modifiedPath);
+        console.log("R", filePath, modifiedPath, finalPath);
+        return fs.readFileSync(finalPath, 'utf8');
+    }
+
+    isRealLocalFile(filePath) {
+        let modifiedPath = filePath.replace(this.releaseDir, '');
+
+        if (/([/\\])mglcore([/\\])/i.test(modifiedPath)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    saveUrlToFileSync(url, savePath) {
+        const buffer = execSync(`curl -sL "${url}"`);
+        fs.writeFileSync(savePath, buffer);
+    }
+
+    async minifyCode(code) {
+        try {
+            const result = await esbuild.transform(code, {
+                minify: true,
+                loader: 'js', // Укажите 'ts', если код на TypeScript
+                logLevel: 'error'
+            });
+
+            return result.code;
+        } catch (error) {
+            console.error('Ошибка минификации:', error);
+            throw error;
+        }
+    }
+
+   minifyGlsl(glsl) {
+        // 1. Удаляем многострочные и однострочные комментарии GLSL
+        let code = glsl
+            .replace(/\/\*[\s\S]*?\*\//g, '')
+            .replace(/\/\/[^\n\r]*/g, '');
+
+        const lines = code.split(/\r?\n/);
+        const result = [];
+
+        // 2. Обрабатываем построчно
+        for (let line of lines) {
+            line = line.trim();
+            if (!line) continue;
+
+            if (line.startsWith('#')) {
+                // Директивы (#define, #include <...>, #ifdef) не сжимаем агрессивно,
+                // чтобы не сломать парсер Three.js и макросы
+                result.push({ isDirective: true, text: line });
+            } else {
+                // Обычный код: удаляем лишние пробелы вокруг операторов и скобок
+                let minified = line
+                    .replace(/\s+/g, ' ')
+                    .replace(/\s*([;{}(),=+\-*/%?:!~<>&|^\[\]])\s*/g, '$1');
+                result.push({ isDirective: false, text: minified });
+            }
+        }
+
+        // 3. Собираем обратно
+        let output = '';
+        for (const item of result) {
+            if (item.isDirective) {
+                if (output.length > 0 && !output.endsWith('\n')) {
+                    output += '\n';
+                }
+                output += item.text + '\n';
+            } else {
+                if (
+                    output.length > 0 &&
+                    !output.endsWith('\n') &&
+                    !/[;{}(),=+\-*/%?:!~<>&|^\[\]]$/.test(output) &&
+                    !/^[;{}(),=+\-*/%?:!~<>&|^\[\]]/.test(item.text)
+                ) {
+                    output += ' ';
+                }
+                output += item.text;
+            }
+        }
+
+        return output.trim();
+    }
+
+    // Поиск и замена всех блоков /* glsl */ `...` в JS коде
+    minifyGlslInSource(source) {
+        if (!source || !source.includes('/* glsl */')) return source;
+
+        // Регулярное выражение ищет /* glsl */ перед строкой в обратных кавычках
+        const glslRegex = /\/\*\s*glsl\s*\*\/[\s\r\n]*`((?:[^`\\]|\\.)*)`/g;
+
+        // ВАЖНО: используем функцию в replace, чтобы не испортить знаки $ внутри строк
+        return source.replace(glslRegex, (match, glslCode) => {
+            return '`' + this.minifyGlsl(glslCode) + '`';
+        });
+    }
+
 };
 
 let bundle = new mglBundle();

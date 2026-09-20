@@ -168,7 +168,12 @@ let mglBuild = {
     // Auth html message
     getAuthHtml(){
         return '<span style="color: #f1c40f; cursor: pointer;" onclick="window.CrazyGames.SDK.user.showAuthPrompt()">Login</span>';
-    }
+    },
+
+    // Logs
+    log: (...args) => console.log(...args),
+    warn: (...args) => console.warn(...args),
+    error: (...args) => console.error(...args)
 };
 
 async function mglBuildInit(){

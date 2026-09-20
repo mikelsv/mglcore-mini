@@ -48,10 +48,109 @@ var mglBuild = {
     },
 
     // Adversiting
-    showReward(callback){
+    showReward(callback) {
         callback(this.bonusFlags.BONUS_OPEN);
-        callback(this.bonusFlags.BONUS_REWARDED);
-        callback(this.bonusFlags.BONUS_CLOSE);
+        // callback(this.bonusFlags.BONUS_REWARDED);
+        // callback(this.bonusFlags.BONUS_CLOSE);
+
+        // 2. Создаем темный полупрозрачный фон (overlay)
+        const overlay = document.createElement('div');
+        Object.assign(overlay.style, {
+            position: 'fixed',
+            top: '0',
+            left: '0',
+            width: '100%',
+            height: '100%',
+            backgroundColor: 'rgba(0, 0, 0, 0.6)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: '999999',
+            pointerEvents: 'auto', // Фон принимает клики на себя
+            touchAction: 'none'    // Запрещает скролл заднего плана на смартфонах
+        });
+
+        const stopPropagation = (e) => e.stopPropagation();
+        overlay.addEventListener('click', stopPropagation);
+        overlay.addEventListener('mousedown', stopPropagation);
+        overlay.addEventListener('mouseup', stopPropagation);
+        overlay.addEventListener('touchstart', stopPropagation);
+        overlay.addEventListener('touchend', stopPropagation);
+
+        // 3. Создаем само окно сообщения
+        const modal = document.createElement('div');
+        Object.assign(modal.style, {
+            backgroundColor: '#fff',
+            padding: '24px',
+            borderRadius: '8px',
+            textAlign: 'center',
+            boxShadow: '0 4px 15px rgba(0,0,0,0.3)',
+            minWidth: '280px',
+            fontFamily: 'sans-serif'
+        });
+
+        // Текст внутри окна
+        const title = document.createElement('p');
+        title.textContent = 'Реклама';
+        title.style.margin = '0 0 20px 0';
+        title.style.fontSize = '18px';
+        title.style.fontWeight = 'bold';
+        modal.appendChild(title);
+
+        // Контейнер для кнопок
+        const btnContainer = document.createElement('div');
+        btnContainer.style.display = 'flex';
+        btnContainer.style.justifyContent = 'space-around';
+        btnContainer.style.gap = '10px';
+
+        // Кнопка "Отмена"
+        const cancelBtn = document.createElement('button');
+        cancelBtn.textContent = 'Отмена';
+        styleButton(cancelBtn, '#6c757d');
+        cancelBtn.addEventListener('click', () => {
+            callback(this.bonusFlags.BONUS_CLOSE);
+            closeModal();
+        });
+
+        // Кнопка "Закрыть" (С получением награды)
+        const rewardBtn = document.createElement('button');
+        rewardBtn.textContent = 'Закрыть';
+        styleButton(rewardBtn, '#28a745');
+        rewardBtn.addEventListener('click', () => {
+            callback(this.bonusFlags.BONUS_REWARDED);
+            callback(this.bonusFlags.BONUS_CLOSE);
+            closeModal();
+        });
+
+        // Собираем структуру воедино
+        btnContainer.appendChild(cancelBtn);
+        btnContainer.appendChild(rewardBtn);
+        modal.appendChild(btnContainer);
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+
+        // Функция для удаления модального окна из DOM
+        function closeModal() {
+            if (overlay.parentNode) {
+                overlay.parentNode.removeChild(overlay);
+            }
+        }
+
+        // Хелпер для базового стиля кнопок
+        function styleButton(btn, bgColor) {
+            Object.assign(btn.style, {
+                padding: '12px 16px', // Чуть увеличили для удобного тапа пальцем
+                border: 'none',
+                borderRadius: '4px',
+                color: '#fff',
+                backgroundColor: bgColor,
+                cursor: 'pointer',
+                fontSize: '15px',
+                fontWeight: '600',
+                flex: '1',
+                webkitTapHighlightColor: 'transparent' // Убираем синее выделение при тапе на iOS/Android
+            });
+        }
     },
 
     showAdversiteInterstitial(callback){
